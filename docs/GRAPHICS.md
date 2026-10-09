@@ -72,6 +72,20 @@ included:
 The crowd sprites cost less than the capsules they replace. The extra cost on high is mostly
 the four ball kids and their shadows.
 
+## Landscape pass
+
+- **Vegetation** (`Nature.tsx`): about 2,400 trees on High (1,400 Medium, 500 Low) on the
+  hills: cypresses on the lower ground, umbrella pines on the ridges, olives on the open
+  terraces. They are scattered in groves by a noise field (`woodland` in `terrain.ts`) from
+  95 m out, so the club grounds stay open. Low-poly and instanced: three draw calls.
+- **Hillside colours** follow the same field: golden dry grass on open slopes, maquis scrub,
+  dark green under the groves, pale rock higher up, instead of one olive tone.
+- **Mountain ridges** in three layers with smooth massifs, pre-blended toward the haze (blue
+  and lighter with distance) and drawn without fog, so they read as layered distance instead
+  of one grey band.
+- **Town**: walls in whitewash, sand, ochre and faded terracotta.
+- **Grade**: a little saturation after the AgX tone mapping, which washes colours out.
+
 ## Next steps, by value
 
 1. **Clubhouse depth.** Recessed windows and arches, a balcony rail, shutters and a terrace
@@ -84,6 +98,5 @@ the four ball kids and their shadows.
    avatar variety: more Rocketbox characters through `tools/rocketbox/`.
 4. **Animated ball kids.** Run to collect balls after a point, using the players' rig.
 5. **Instanced grass** in a band just outside the fence, for the menu orbit and replays.
-6. **Contact shadows** under the players' feet (drei `ContactShadows`, high only) and
-   cascaded shadow maps (three `CSM`) for crisp shadows near the camera and wide coverage.
+6. **Cascaded shadow maps** (soft contact blobs under the players are done) (three `CSM`) for crisp shadows near the camera and wide coverage.
 7. **Replay camera with depth of field** after big points, using the existing slow motion.

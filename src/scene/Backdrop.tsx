@@ -4,22 +4,13 @@ import * as THREE from 'three'
 import { rng } from './textures'
 import { SUN_DIR } from './Lighting'
 import { COAST_X } from './Court'
+import { fbm, hillHeight, woodland } from './terrain'
+import { Vegetation } from './Nature'
 
 // Everything far away: a hillside town behind the club, a bay on the sun side and a layer
 // of drifting clouds. All procedural and instanced: a handful of draw calls in total.
 
 // ------------------------------------------------------------------ terrain
-
-/** Height of the hillside rising behind the club (metres), zero within ~95 m. */
-function hillHeight(x: number, z: number) {
-  const r = Math.hypot(x, z)
-  const ang = Math.atan2(z, x)
-  // Strongest behind the club (-z), fading toward the bay (+x).
-  const behind = Math.max(0, -Math.sin(ang)) * 0.75 + Math.max(0, -Math.cos(ang)) * 0.45
-  const rise = Math.max(0, r - 95) * 0.16 * Math.min(1, behind)
-  const ripple = Math.sin(x * 0.021) * Math.cos(z * 0.017) * 6 + Math.sin(x * 0.05 + z * 0.03) * 2.5
-  return rise > 0 ? rise + ripple * Math.min(1, rise / 12) : 0
-}
 
 function Hillside() {
   const geo = useMemo(() => {
@@ -28,8 +19,13 @@ function Hillside() {
     const pos: number[] = []
     const col: number[] = []
     const idx: number[] = []
-    const dry = new THREE.Color('#9a9258')
-    const scrub = new THREE.Color('#5f6b3c')
+    // Mediterranean hillside: golden dry grass on open slopes, maquis scrub and dark green
+    // groves where the woodland field is dense (the trees follow the same field), pale rock
+    // breaking through higher up.
+    const dry = new THREE.Color('#b29a5f')
+    const scrub = new THREE.Color('#77803f')
+    const grove = new THREE.Color('#465c30')
+    const rock = new THREE.Color('#a39886')
     const r = rng(9)
     for (let i = 0; i <= rings; i++) {
       const radius = 90 + Math.pow(i / rings, 1.4) * 360
@@ -40,7 +36,14 @@ function Hillside() {
         const z = Math.sin(ang) * radius
         const y = hillHeight(x, z) - 0.05
         pos.push(x, y, z)
-        const c = scrub.clone().lerp(dry, 0.35 + r() * 0.4 + Math.min(0.3, y / 120))
+        const wood = woodland(x, z)
+        const detail = fbm(x * 0.06, z * 0.06, 3)
+        const c = dry
+          .clone()
+          .lerp(scrub, smooth(0.32, 0.55, wood + (detail - 0.5) * 0.25))
+          .lerp(grove, smooth(0.5, 0.72, wood))
+          .lerp(rock, smooth(0.6, 0.85, detail) * Math.min(1, y / 35) * 0.7)
+        c.multiplyScalar(0.9 + r() * 0.16)
         col.push(c.r, c.g, c.b)
       }
     }
@@ -63,6 +66,11 @@ function Hillside() {
       <meshStandardMaterial vertexColors roughness={1} side={THREE.DoubleSide} />
     </mesh>
   )
+}
+
+function smooth(e0: number, e1: number, x: number) {
+  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)))
+  return t * t * (3 - 2 * t)
 }
 
 // ------------------------------------------------------------------ town
@@ -100,6 +108,8 @@ function facadeTexture() {
   t.anisotropy = 4
   return t
 }
+
+const WALLS = ['#f4efe4', '#f1e9d8', '#efe2c4', '#e9cf9c', '#ead9b8', '#f3ede2', '#dfb48e', '#f0e4cf', '#e6c7a8']
 
 interface House {
   x: number
@@ -174,7 +184,8 @@ function Town() {
       m.scale.set(h.w, h.h + 4, h.d)
       m.updateMatrix()
       walls.current.setMatrixAt(i, m.matrix)
-      walls.current.setColorAt(i, c.setHSL(0.09 + h.tint * 0.03, 0.22 + h.tint * 0.3, 0.74 - h.tint * 0.12))
+      // Mostly whitewash, with ochre, sand and faded terracotta houses mixed in.
+      walls.current.setColorAt(i, c.set(WALLS[Math.floor(h.tint * 97) % WALLS.length]))
       m.position.y = h.y + h.h
       m.scale.set(h.w * 1.08, 1.6 + h.tint * 1.2, h.d * 1.08)
       m.updateMatrix()
@@ -344,6 +355,7 @@ export function Backdrop({ detail }: { detail: 'high' | 'medium' | 'low' }) {
     <group>
       <Hillside />
       <Town />
+      <Vegetation count={detail === 'high' ? 2400 : detail === 'medium' ? 1400 : 500} />
       <Sea />
       {detail !== 'low' && <CloudDome />}
     </group>

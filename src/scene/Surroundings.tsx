@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { COURT } from '../game/constants'
@@ -365,37 +365,61 @@ function Bench({ z }: { z: number }) {
 
 // ------------------------------------------------------------------ skyline + hills
 
-/** Distant chaparral ridgeline: a jagged strip that the fog turns into layered haze. */
+/**
+ * Distant mountain ridges in three layers. Real air turns far hills blue-grey and lighter
+ * (aerial perspective); the scene fog would flatten anything this far into one grey, so each
+ * layer is pre-blended toward the haze instead and drawn without fog.
+ */
+const RIDGES = [
+  { dist: 430, base: 34, amp: 30, color: '#4f5d3d', seed: 77 },
+  { dist: 560, base: 58, amp: 42, color: '#6d7d74', seed: 91 },
+  { dist: 720, base: 95, amp: 70, color: '#93a5b0', seed: 13 },
+]
+
+function ridgeGeometry(dist: number, base: number, amp: number, seed: number) {
+  const r = rng(seed)
+  const segs = 160
+  const phase = [r() * 6, r() * 6, r() * 6, r() * 6]
+  const g = new THREE.PlaneGeometry(1, 1, segs, 1)
+  const pos = g.attributes.position as THREE.BufferAttribute
+  const heights: number[] = []
+  for (let i = 0; i <= segs; i++) {
+    const u = i / segs
+    // Broad massifs, secondary peaks and a little jagged detail on the crest.
+    const n =
+      Math.sin(u * 7.1 + phase[0]) * 0.55 +
+      Math.sin(u * 15.3 + phase[1]) * 0.28 +
+      Math.abs(Math.sin(u * 37 + phase[2])) * 0.12 +
+      Math.sin(u * 83 + phase[3]) * 0.04
+    heights.push(base + amp * (0.5 + 0.5 * n))
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const col = Math.round((pos.getX(i) + 0.5) * segs)
+    const ang = -Math.PI / 2 + (col / segs - 0.5) * Math.PI * 1.7
+    const top = pos.getY(i) > 0
+    pos.setXYZ(i, Math.cos(ang) * dist, top ? heights[col] : -5, Math.sin(ang) * dist)
+  }
+  g.computeVertexNormals()
+  return g
+}
+
 function Hills() {
-  const geo = useMemo(() => {
-    const r = rng(77)
-    const layers: THREE.BufferGeometry[] = []
-    for (let layer = 0; layer < 2; layer++) {
-      const dist = 420 + layer * 110
-      const segs = 90
-      const g = new THREE.PlaneGeometry(1, 1, segs, 1)
-      const pos = g.attributes.position as THREE.BufferAttribute
-      let h = 30
-      const heights: number[] = []
-      for (let i = 0; i <= segs; i++) {
-        h = Math.max(12, Math.min(75 + layer * 25, h + (r() - 0.48) * 14))
-        heights.push(h)
-      }
-      for (let i = 0; i < pos.count; i++) {
-        const col = Math.round((pos.getX(i) + 0.5) * segs)
-        const ang = -Math.PI / 2 + (col / segs - 0.5) * Math.PI * 1.5
-        const top = pos.getY(i) > 0
-        pos.setXYZ(i, Math.cos(ang) * dist, top ? heights[col] : -5, Math.sin(ang) * dist)
-      }
-      g.computeVertexNormals()
-      layers.push(g)
-    }
-    return mergeGeometries(layers)
-  }, [])
+  const layers = useMemo(
+    () =>
+      RIDGES.map((l) => ({
+        geo: ridgeGeometry(l.dist, l.base, l.amp, l.seed),
+        mat: new THREE.MeshBasicMaterial({ color: l.color, fog: false, side: THREE.DoubleSide }),
+      })),
+    [],
+  )
+  useEffect(() => () => layers.forEach((l) => (l.geo.dispose(), l.mat.dispose())), [layers])
+  // Far layers first, so the near ones cover them.
   return (
-    <mesh geometry={geo}>
-      <meshStandardMaterial color="#56603f" roughness={1} side={THREE.DoubleSide} />
-    </mesh>
+    <group>
+      {layers.map((l, i) => (
+        <mesh key={i} geometry={l.geo} material={l.mat} renderOrder={-2 - i} />
+      ))}
+    </group>
   )
 }
 
