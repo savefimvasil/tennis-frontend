@@ -1137,8 +1137,10 @@ function updateRemote(dt: number) {
     const k = b.t > prev.t ? Math.max(0, Math.min(1, (t - prev.t) / (b.t - prev.t))) : 1
     a.x = prev.x + (b.x - prev.x) * k
     a.z = prev.z + (b.z - prev.z) * k
-    a.vx = b.vx
-    a.vz = b.vz
+    // Interpolate the velocity too: the animation reads it (gait, lean), and stepping it per
+    // packet made the remote player's legs and body twitch.
+    a.vx = prev.vx + (b.vx - prev.vx) * k
+    a.vz = prev.vz + (b.vz - prev.vz) * k
     a.yaw = b.yaw
   }
   // Swing animation from the opponent's own updates, unless a strike or toss just set it.

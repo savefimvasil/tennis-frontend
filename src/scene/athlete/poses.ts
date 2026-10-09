@@ -1,8 +1,24 @@
+import { monotoneCubic } from './anim'
+
 // Procedural animation: joint rotations (Euler XYZ, radians) for a right-handed
 // athlete built facing +z. Arms and legs hang along -y at rest.
 // Shoulder/hip x < 0 swings the limb forward, z < 0 raises the right arm sideways.
 
-export const JOINTS = ['spine', 'neck', 'lSh', 'lEl', 'rSh', 'rEl', 'rWr', 'lHip', 'lKnee', 'rHip', 'rKnee'] as const
+export const JOINTS = [
+  'spine',
+  'neck',
+  'lSh',
+  'lEl',
+  'rSh',
+  'rEl',
+  'rWr',
+  'lHip',
+  'lKnee',
+  'lAnk',
+  'rHip',
+  'rKnee',
+  'rAnk',
+] as const
 export type Joint = (typeof JOINTS)[number]
 export type Euler3 = [number, number, number]
 
@@ -37,7 +53,7 @@ export const READY: Pose = makePose({
   lift: -0.09,
 })
 
-type Key = { t: number; pose: Pose }
+export type Key = { t: number; pose: Pose }
 
 function keys(list: [number, PartialPose][]): Key[] {
   return list.map(([t, p]) => ({ t, pose: makePose(mergeReady(p)) }))
@@ -221,29 +237,40 @@ export const SERVE_KEYS = keys([
   [1.75, {}],
 ])
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t
+/** Key times and per-channel values of a track, laid out for the spline. */
+interface Channels {
+  ts: number[]
+  j: Record<Joint, [number[], number[], number[]]>
+  lift: number[]
 }
 
-function smooth(t: number) {
-  return t * t * (3 - 2 * t)
-}
+const channelCache = new WeakMap<Key[], Channels>()
 
-/** Samples a keyframe track at time t into `out`. */
-export function sampleTrack(track: Key[], t: number, out: Pose): Pose {
-  let i = 0
-  while (i < track.length - 2 && t > track[i + 1].t) i++
-  const a = track[i]
-  const b = track[i + 1]
-  const u = smooth(Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))))
-  for (const k of JOINTS) {
-    const ja = a.pose.j[k]
-    const jb = b.pose.j[k]
-    out.j[k][0] = lerp(ja[0], jb[0], u)
-    out.j[k][1] = lerp(ja[1], jb[1], u)
-    out.j[k][2] = lerp(ja[2], jb[2], u)
+function channels(track: Key[]): Channels {
+  let c = channelCache.get(track)
+  if (!c) {
+    const j = {} as Channels['j']
+    for (const k of JOINTS) j[k] = [0, 1, 2].map((i) => track.map((key) => key.pose.j[k][i])) as Channels['j'][Joint]
+    c = { ts: track.map((key) => key.t), j, lift: track.map((key) => key.pose.lift) }
+    channelCache.set(track, c)
   }
-  out.lift = lerp(a.pose.lift, b.pose.lift, u)
+  return c
+}
+
+/**
+ * Samples a keyframe track at time t into `out`. A monotone cubic spline per channel keeps the
+ * motion flowing through the keys (the racket is still moving at contact) while stopping at
+ * real turning points such as the end of the backswing, and never overshooting a key.
+ */
+export function sampleTrack(track: Key[], t: number, out: Pose): Pose {
+  const c = channels(track)
+  for (const k of JOINTS) {
+    const ch = c.j[k]
+    out.j[k][0] = monotoneCubic(c.ts, ch[0], t)
+    out.j[k][1] = monotoneCubic(c.ts, ch[1], t)
+    out.j[k][2] = monotoneCubic(c.ts, ch[2], t)
+  }
+  out.lift = monotoneCubic(c.ts, c.lift, t)
   return out
 }
 

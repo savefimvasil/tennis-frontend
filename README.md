@@ -115,7 +115,7 @@ Changes apply to the next shot. The lab is code-split and not downloaded in norm
 ## Characters
 
 Players are [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) avatars (MIT license,
-© 2020 Microsoft; see `public/models/rocketbox/LICENSE.md`), driven by the game's procedural animation rig.
+© 2020 Microsoft; see `public/models/rocketbox/LICENSE.md`), driven by the game's procedural animation rig (see [docs/ANIMATION.md](docs/ANIMATION.md)).
 `tools/rocketbox/README.md` explains how to add more avatars.
 
 ## Layout
