@@ -109,6 +109,8 @@ export interface AiSpec {
   unforced: number
   /** Chance of aiming through the middle instead of away from the player. */
   centre: number
+  /** Extra error chance on serve returns, scaled by the serve's pace and how wide it is. */
+  returnError: number
 }
 
 /** Help the human player gets at each difficulty. */
@@ -126,7 +128,7 @@ export interface PlayerHelp {
 }
 
 export const PLAYER_HELP: Record<Difficulty, PlayerHelp> = {
-  easy: { assist: 1, track: 0.55, timing: 1.6, reach: 1.9, error: 0.6 },
+  easy: { assist: 1, track: 0.45, timing: 1.4, reach: 1.85, error: 0.75 },
   pro: { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 },
   ace: { assist: 0.6, track: 0, timing: 1, reach: 1.55, error: 1 },
 }
@@ -136,15 +138,16 @@ export const ONLINE_HELP: PlayerHelp = { assist: 0.75, track: 0.2, timing: 1.15,
 
 export const AI_LEVELS: Record<Difficulty, AiSpec> = {
   easy: {
-    speed: 3.8,
-    reaction: 0.55,
-    pace: 0.78,
-    grades: { perfect: 0.03, good: 0.37, early: 0.3, late: 0.3 },
+    speed: 4.5,
+    reaction: 0.42,
+    pace: 0.86,
+    grades: { perfect: 0.08, good: 0.44, early: 0.24, late: 0.24 },
     readsOut: 0.1,
-    aimMargin: 2.5,
-    serveFirst: 0.4,
-    unforced: 0.16,
-    centre: 0.6,
+    aimMargin: 2.2,
+    serveFirst: 0.45,
+    unforced: 0.07,
+    centre: 0.5,
+    returnError: 0.22,
   },
   pro: {
     speed: 5.6,
@@ -156,16 +159,18 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     serveFirst: 0.68,
     unforced: 0.05,
     centre: 0.28,
+    returnError: 0.24,
   },
   ace: {
     speed: 6.6,
     reaction: 0.1,
-    pace: 1.12,
+    pace: 1.06,
     grades: { perfect: 0.65, good: 0.33, early: 0.01, late: 0.01 },
     readsOut: 0.97,
-    aimMargin: 0.8,
+    aimMargin: 1.0,
     serveFirst: 0.8,
-    unforced: 0.015,
+    unforced: 0.045,
     centre: 0.15,
+    returnError: 0.32,
   },
 }

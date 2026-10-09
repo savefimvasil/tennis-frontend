@@ -680,8 +680,16 @@ function updateAI(dt: number, p: V3, v: V3) {
       Math.max(0, pace - 22) / 25 +
       (p.y < 0.4 || p.y > 1.9 ? 0.5 : 0) +
       Math.max(0, Math.abs(win.lateral) - 0.9) / 2
+    let missChance = spec.unforced * pressure
+    if (sim.hits === 1) {
+      // Returning a serve: pace and being pulled wide force errors, even from the best.
+      const serveSpeed = Math.hypot(sim.prevV.x, sim.prevV.y, sim.prevV.z)
+      const quality =
+        Math.max(0, Math.min(1.4, (serveSpeed - 16) / 18)) + Math.max(0, Math.abs(win.lateral) - 0.8) * 0.6
+      missChance += spec.returnError * quality
+    }
     let miss: Miss = null
-    if (Math.random() < spec.unforced * pressure) {
+    if (Math.random() < missChance) {
       const r = Math.random()
       miss = r < 0.4 ? 'net' : r < 0.75 ? 'long' : 'wide'
     }
