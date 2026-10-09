@@ -6,7 +6,7 @@ import { PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
 import { useGame } from '../game/store'
 import { Athlete, KITS } from './athlete/Athlete'
-import { ROCKETBOX } from './athlete/Rocketbox'
+import { opponentSkin, skinById } from './athlete/skins'
 import { Ball } from './Ball'
 import { CameraRig } from './CameraRig'
 import { Court } from './Court'
@@ -31,6 +31,7 @@ export function Scene() {
   const quality = useGame((s) => s.quality)
   const setQuality = useGame((s) => s.setQuality)
   const screen = useGame((s) => s.screen)
+  const skin = useGame((s) => s.skin)
   const [dpr, setDpr] = useState(() => Math.min(window.devicePixelRatio || 1, 1.75))
   const shadowSize = quality === 'high' ? 2048 : quality === 'medium' ? 2048 : 1024
 
@@ -40,7 +41,11 @@ export function Scene() {
       dpr={dpr}
       flat
       gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
-      camera={{ fov: 46, near: 0.1, far: 1200, position: [0, 8, 30] }}
+      camera={{ fov: 50, near: 0.1, far: 1200, position: [0, 8, 30] }}
+      onCreated={(state) => {
+        // Dev-only handle for automated inspection.
+        if (import.meta.env.DEV) Object.assign(window, { __r3f: state })
+      }}
     >
       <PerformanceMonitor
         onDecline={() => {
@@ -53,15 +58,20 @@ export function Scene() {
       />
       <Lighting key={shadowSize} shadowSize={shadowSize} />
       <Suspense fallback={null}>
-        <Physics gravity={[0, PHYSICS.gravity, 0]} timeStep={PHYSICS.timeStep} paused={screen !== 'playing'} interpolate>
+        <Physics
+          gravity={[0, PHYSICS.gravity, 0]}
+          timeStep={PHYSICS.timeStep}
+          paused={screen !== 'playing'}
+          interpolate
+        >
           <GameLoop />
           <Court />
           <Net />
           <Ball />
         </Physics>
       </Suspense>
-      <Athlete side={0} kit={KITS.home} model={ROCKETBOX.home} />
-      <Athlete side={1} kit={KITS.away} model={ROCKETBOX.away} />
+      <Athlete side={0} kit={KITS.home} skin={skinById(skin)} />
+      <Athlete side={1} kit={KITS.away} skin={opponentSkin(skin)} />
       <Surroundings detail={quality} />
       <Fx />
       <CameraRig />

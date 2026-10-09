@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { inServiceBox, inSinglesCourt, simulate, solveShot } from './flight'
+import {
+  applyBounce,
+  courtPaceRating,
+  inServiceBox,
+  inSinglesCourt,
+  setSurface,
+  setWind,
+  simulate,
+  solveShot,
+  SURFACES,
+} from './flight'
 import { netHeightAt } from '../game/constants'
 
 describe('flight model', () => {
@@ -54,5 +64,50 @@ describe('flight model', () => {
     })
     expect(Math.abs(sol.landing.z + 10)).toBeLessThan(0.3)
     expect(inSinglesCourt(sol.landing.x, sol.landing.z, -1)).toBe(true)
+  })
+
+  it('surfaces fall into the right ITF pace categories', () => {
+    expect(courtPaceRating(SURFACES.clay)).toBeLessThanOrEqual(29)
+    const hard = courtPaceRating(SURFACES.hard)
+    expect(hard).toBeGreaterThanOrEqual(35)
+    expect(hard).toBeLessThan(45)
+    expect(courtPaceRating(SURFACES.grass)).toBeGreaterThanOrEqual(45)
+  })
+
+  it('clay bounces slower and higher than grass', () => {
+    const run = (id: 'clay' | 'grass') => {
+      const v = { x: 0, y: -8.27, z: -28.8 }
+      const w = { x: 0, y: 0, z: 0 }
+      applyBounce(v, w, SURFACES[id])
+      return v
+    }
+    const clay = run('clay')
+    const grass = run('grass')
+    expect(Math.abs(clay.z)).toBeLessThan(Math.abs(grass.z))
+    expect(clay.y).toBeGreaterThan(grass.y)
+  })
+
+  it('aims through crosswind and sidespin', () => {
+    setWind(3, 0)
+    const sol = solveShot({
+      from: { x: -0.6, y: 2.9, z: 12.1 },
+      target: { x: 3.2, z: -5.4 },
+      speed: 44,
+      spin: 120,
+      sidespin: 180,
+      netClearance: 0.12,
+    })
+    setWind(0, 0)
+    expect(Math.hypot(sol.landing.x - 3.2, sol.landing.z + 5.4)).toBeLessThan(0.15)
+  })
+
+  it('setSurface switches the live bounce model', () => {
+    setSurface('clay')
+    const v = { x: 0, y: -8.27, z: -28.8 }
+    applyBounce(v, { x: 0, y: 0, z: 0 })
+    setSurface('hard')
+    const v2 = { x: 0, y: -8.27, z: -28.8 }
+    applyBounce(v2, { x: 0, y: 0, z: 0 })
+    expect(Math.abs(v.z)).toBeLessThan(Math.abs(v2.z))
   })
 })

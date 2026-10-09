@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AI } from '../game/constants'
+import { AI, COURT } from '../game/constants'
 import { sim } from '../game/sim'
 import { useGame } from '../game/store'
 import { playApplause, playBounce, playFence, playGroan, playHit, playNet } from '../audio/sound'
@@ -63,6 +63,54 @@ function LandingMarker() {
   )
 }
 
+/** While the player serves: the target service box lights up and a crosshair shows the aim. */
+function ServeAim() {
+  const group = useRef<THREE.Group>(null!)
+  const box = useRef<THREE.Mesh>(null!)
+  const ring = useRef<THREE.Group>(null!)
+  useFrame((state) => {
+    const t = sim.serveTarget
+    group.current.visible = !!t
+    if (!t) return
+    // The box is on the opponent's side, on the same side of the centre line as the aim.
+    const bx = Math.sign(t.x) * (COURT.singlesHalfWidth / 2)
+    const bz = Math.sign(t.z) * (COURT.serviceLine / 2)
+    box.current.position.set(bx, 0.006, bz)
+    const pulse = 1 + Math.sin(state.clock.elapsedTime * 6) * 0.1
+    ring.current.position.set(t.x, 0.01, t.z)
+    // Large enough to read from the far baseline.
+    ring.current.scale.setScalar(1.7 * pulse)
+  })
+  return (
+    <group ref={group} visible={false}>
+      <mesh ref={box} rotation-x={-Math.PI / 2} renderOrder={2}>
+        <planeGeometry args={[COURT.singlesHalfWidth, COURT.serviceLine]} />
+        <meshBasicMaterial color="#d8f03c" transparent opacity={0.22} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <group ref={ring} rotation-x={-Math.PI / 2} renderOrder={3}>
+        <mesh>
+          <ringGeometry args={[0.42, 0.52, 48]} />
+          <meshBasicMaterial color="#d8f03c" transparent opacity={0.95} depthWrite={false} toneMapped={false} />
+        </mesh>
+        {[0, 1, 2, 3].map((i) => (
+          <mesh
+            key={i}
+            rotation-z={(i * Math.PI) / 2}
+            position={[Math.cos((i * Math.PI) / 2) * 0.75, Math.sin((i * Math.PI) / 2) * 0.75, 0]}
+          >
+            <planeGeometry args={[0.32, 0.07]} />
+            <meshBasicMaterial color="#d8f03c" transparent opacity={0.95} depthWrite={false} toneMapped={false} />
+          </mesh>
+        ))}
+        <mesh>
+          <circleGeometry args={[0.08, 20]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.9} depthWrite={false} toneMapped={false} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
 const POOL = 8
 
 /** Expanding dust rings at bounces, plus all event-driven audio. */
@@ -113,7 +161,13 @@ function EventFx() {
   return (
     <group>
       {Array.from({ length: POOL }, (_, i) => (
-        <mesh key={i} ref={(m) => void (meshes.current[i] = m)} rotation-x={-Math.PI / 2} visible={false} renderOrder={2}>
+        <mesh
+          key={i}
+          ref={(m) => void (meshes.current[i] = m)}
+          rotation-x={-Math.PI / 2}
+          visible={false}
+          renderOrder={2}
+        >
           <planeGeometry args={[1, 1]} />
           <meshBasicMaterial map={tex} color="#e6dcc8" transparent depthWrite={false} />
         </mesh>
@@ -127,6 +181,7 @@ export function Fx() {
     <>
       <BallBlob />
       <LandingMarker />
+      <ServeAim />
       <EventFx />
     </>
   )

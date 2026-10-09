@@ -16,7 +16,10 @@ function buildWorld() {
   world.timestep = PHYSICS.timeStep
   const ground = world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(60, 0.5, 60).setTranslation(0, -0.5, 0).setRestitution(BALL.restitution).setFriction(BALL.friction),
+    RAPIER.ColliderDesc.cuboid(60, 0.5, 60)
+      .setTranslation(0, -0.5, 0)
+      .setRestitution(BALL.restitution)
+      .setFriction(BALL.friction),
     ground,
   )
   const netHandles = new Set<number>()
@@ -54,10 +57,17 @@ function buildWorld() {
     fenceHandles.add(c.handle)
   }
   const ball = world.createRigidBody(
-    RAPIER.RigidBodyDesc.dynamic().setTranslation(0, 1.4, 12).setCcdEnabled(true).setCanSleep(false).setAngularDamping(0.05),
+    RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(0, 1.4, 12)
+      .setCcdEnabled(true)
+      .setCanSleep(false)
+      .setAngularDamping(0.05),
   )
   world.createCollider(
-    RAPIER.ColliderDesc.ball(BALL.radius).setMass(BALL.mass).setRestitution(BALL.restitution).setFriction(BALL.friction),
+    RAPIER.ColliderDesc.ball(BALL.radius)
+      .setMass(BALL.mass)
+      .setRestitution(BALL.restitution)
+      .setFriction(BALL.friction),
     ball,
   )
   return { world, ball, netHandles, fenceHandles }
@@ -87,8 +97,12 @@ function botHuman(state: { tossAt: number; pressedFor: number; pressAt?: number;
   const v = ball.linvel()
   if (sim.lastHitter === 1 && sim.prediction) {
     const elapsed = sim.time - sim.predictionStart
+    // Take the ball at a comfortable height after the bounce, stepping in rather than retreating to the fence.
+    const bounceT = sim.prediction.bounces[0]?.t ?? 0
+    const after = sim.prediction.samples.filter((s) => s.t > elapsed && s.t > bounceT && s.z > 6)
     const target =
-      sim.prediction.samples.find((s) => s.t > elapsed && s.z > 8 && s.y < 1.4 && s.vy < 0 && s.t > (sim.prediction!.bounces[0]?.t ?? 0)) ??
+      after.find((s) => s.y > 0.5 && s.y < 1.6 && s.z < 16.5) ??
+      after.find((s) => s.y < 1.8 && s.z < 18) ??
       sim.prediction.samples.find((s) => s.t > elapsed && s.z > 6)
     if (target) {
       const dx = target.x - 0.75 - a.x
@@ -122,63 +136,96 @@ beforeAll(async () => {
 })
 
 describe('full match simulation', () => {
-  it.each(['easy', 'pro', 'ace'] as const)('plays a quick match against %s to completion', (difficulty) => {
-    const { world, ball, netHandles, fenceHandles } = buildWorld()
-    sim.ball = ball as unknown as RapierRigidBody
-    const g = useGame.getState()
-    g.setFormat('quick')
-    g.setDifficulty(difficulty)
-    g.start()
-    resetForServe()
-    const queue = new RAPIER.EventQueue(true)
-    const endings = new Map<string, number>()
-    let lastToast = 0
-    let longestPhase = 0
-    let phaseSince = sim.time
-    let lastPhase = sim.phase
-    let maxRally = 0
-    let totalHits = 0
-    let points = 0
-    const bot: { tossAt: number; pressedFor: number; pressAt?: number; aim?: number; aimUntil?: number } = { tossAt: -1, pressedFor: 0 }
-    const dt = PHYSICS.timeStep
-    let steps = 0
+  it.each(['easy', 'pro', 'ace'] as const)(
+    'plays a quick match against %s to completion',
+    (difficulty) => {
+      const { world, ball, netHandles, fenceHandles } = buildWorld()
+      sim.ball = ball as unknown as RapierRigidBody
+      const g = useGame.getState()
+      g.setFormat('quick')
+      g.setDifficulty(difficulty)
+      g.start()
+      resetForServe()
+      const queue = new RAPIER.EventQueue(true)
+      const endings = new Map<string, number>()
+      let lastToast = 0
+      let longestPhase = 0
+      let phaseSince = sim.time
+      let lastPhase = sim.phase
+      let maxRally = 0
+      let totalHits = 0
+      let points = 0
+      const bot: { tossAt: number; pressedFor: number; pressAt?: number; aim?: number; aimUntil?: number } = {
+        tossAt: -1,
+        pressedFor: 0,
+      }
+      const dt = PHYSICS.timeStep
+      let steps = 0
 
-    while (useGame.getState().match.winner === null && steps < 120 * 60 * 150) {
-      botHuman(bot)
-      stepGame(dt)
-      world.step(queue)
-      queue.drainCollisionEvents((h1, h2, started) => {
-        if (!started) return
-        if (netHandles.has(h1) || netHandles.has(h2)) onNetTouch()
-        if (fenceHandles.has(h1) || fenceHandles.has(h2)) onFenceTouch()
-      })
-      steps++
-      const st = useGame.getState()
-      if (st.toast && st.toast.id !== lastToast) {
-        lastToast = st.toast.id
-        endings.set(st.toast.title, (endings.get(st.toast.title) ?? 0) + 1)
-        totalHits += sim.hits
-        if ((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.DIAG && (st.toast.title === 'Out' || st.toast.title === 'Net')) {
-          const bp = ball.translation()
-          console.log('ERR', st.toast.title, 'by', sim.lastHitter, 'at', bp.x.toFixed(2), bp.z.toFixed(2), 'hits', sim.hits)
+      while (useGame.getState().match.winner === null && steps < 120 * 60 * 150) {
+        botHuman(bot)
+        stepGame(dt)
+        world.step(queue)
+        queue.drainCollisionEvents((h1, h2, started) => {
+          if (!started) return
+          if (netHandles.has(h1) || netHandles.has(h2)) onNetTouch()
+          if (fenceHandles.has(h1) || fenceHandles.has(h2)) onFenceTouch()
+        })
+        steps++
+        const st = useGame.getState()
+        if (st.toast && st.toast.id !== lastToast) {
+          lastToast = st.toast.id
+          endings.set(st.toast.title, (endings.get(st.toast.title) ?? 0) + 1)
+          totalHits += sim.hits
+          if ((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.DIAG) {
+            const bp = ball.translation()
+            const h = sim.athletes[0]
+            console.log(
+              'END',
+              st.toast.title,
+              'lastHitter',
+              sim.lastHitter,
+              'ball',
+              bp.x.toFixed(2),
+              bp.y.toFixed(2),
+              bp.z.toFixed(2),
+              'hits',
+              sim.hits,
+              'human',
+              h.x.toFixed(2),
+              h.z.toFixed(2),
+              'queued',
+              !!h.queued,
+            )
+          }
+          points++
         }
-        points++
+        maxRally = Math.max(maxRally, sim.hits)
+        if (sim.phase !== lastPhase) {
+          lastPhase = sim.phase
+          phaseSince = sim.time
+        }
+        if (sim.phase !== 'rally') longestPhase = Math.max(longestPhase, sim.time - phaseSince)
       }
-      maxRally = Math.max(maxRally, sim.hits)
-      if (sim.phase !== lastPhase) {
-        lastPhase = sim.phase
-        phaseSince = sim.time
-      }
-      if (sim.phase !== 'rally') longestPhase = Math.max(longestPhase, sim.time - phaseSince)
-    }
 
-    const m = useGame.getState().match
-    const stats = useGame.getState().stats
-    console.log(difficulty, 'sets', JSON.stringify(m.sets), 'winner', m.winner, 'minutes', (sim.time / 60).toFixed(1))
-    console.log('endings', JSON.stringify(Object.fromEntries(endings)))
-    console.log('stats', JSON.stringify(stats), 'avg rally', (totalHits / Math.max(1, points)).toFixed(1), 'max rally', maxRally, 'longest phase s', longestPhase.toFixed(1))
-    expect(m.winner).not.toBeNull()
-    expect(longestPhase).toBeLessThan(20)
-    expect(maxRally).toBeGreaterThan(2)
-  }, 120000)
+      const m = useGame.getState().match
+      const stats = useGame.getState().stats
+      console.log(difficulty, 'sets', JSON.stringify(m.sets), 'winner', m.winner, 'minutes', (sim.time / 60).toFixed(1))
+      console.log('endings', JSON.stringify(Object.fromEntries(endings)))
+      console.log(
+        'stats',
+        JSON.stringify(stats),
+        'avg rally',
+        (totalHits / Math.max(1, points)).toFixed(1),
+        'max rally',
+        maxRally,
+        'longest phase s',
+        longestPhase.toFixed(1),
+      )
+      expect(m.winner).not.toBeNull()
+      expect(longestPhase).toBeLessThan(20)
+      expect(maxRally).toBeGreaterThan(2)
+    },
+    120000,
+  )
 })

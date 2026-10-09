@@ -4,7 +4,8 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { BALL, COURT } from '../game/constants'
 import { onFenceTouch } from '../game/director'
-import { courtRoughness, courtTexture, grassTexture } from './textures'
+import { clayTexture, courtRoughness, courtTexture, grassTexture, lawnTexture, radialTexture } from './textures'
+import { useGame } from '../game/store'
 
 const L = COURT.halfLength
 const DW = COURT.doublesHalfWidth
@@ -36,16 +37,69 @@ function linesGeometry() {
   return mergeGeometries(geos)
 }
 
+/** Surface look per court type: playing area, run-off and how the material reads. */
+function useSurfaceMaterials() {
+  const surface = useGame((s) => s.surface)
+  return useMemo(() => {
+    const rough = courtRoughness()
+    if (surface === 'clay') {
+      const inner = clayTexture()
+      const outer = inner.clone()
+      outer.repeat.set(12, 22)
+      outer.needsUpdate = true
+      return { surface, inner, outer, innerRough: 0.97, outerRough: 0.97, outerTint: '#e9ded6', rough }
+    }
+    if (surface === 'grass') {
+      // 2 m stripes across the court, continuing into the run-off.
+      const inner = lawnTexture().clone()
+      inner.repeat.set(1, (L * 2) / 4)
+      inner.needsUpdate = true
+      const outer = lawnTexture().clone()
+      outer.repeat.set(1, (COURT.fenceZ * 2) / 4)
+      outer.needsUpdate = true
+      return { surface, inner, outer, innerRough: 0.9, outerRough: 0.92, outerTint: '#d9e6cf', rough }
+    }
+    const inner = courtTexture('#2c5d8f', 'court-blue')
+    const outer = courtTexture('#3d7656', 'court-green').clone()
+    outer.repeat.set(10, 18)
+    outer.needsUpdate = true
+    return { surface, inner, outer, innerRough: 0.82, outerRough: 0.9, outerTint: '#ffffff', rough }
+  }, [surface])
+}
+
+/** Worn patches where players stand most: behind the baseline centre and at the service line. */
+function Wear({ color, opacity }: { color: string; opacity: number }) {
+  const tex = useMemo(() => radialTexture(), [])
+  const spots: [number, number, number, number][] = [
+    [0, L + 0.7, 4.2, 1.4],
+    [0, -L - 0.7, 4.2, 1.4],
+    [0.4, L - 0.6, 2.4, 0.9],
+    [-0.4, -L + 0.6, 2.4, 0.9],
+    [1.8, L + 0.3, 1.8, 0.8],
+    [-1.8, -L - 0.3, 1.8, 0.8],
+  ]
+  return (
+    <group>
+      {spots.map(([x, z, w, d], i) => (
+        <mesh key={i} rotation-x={-Math.PI / 2} position={[x, 0.0025, z]} renderOrder={1}>
+          <planeGeometry args={[w, d]} />
+          <meshStandardMaterial
+            map={tex}
+            color={color}
+            transparent
+            opacity={opacity}
+            depthWrite={false}
+            roughness={1}
+          />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 export function Court() {
   const lines = useMemo(linesGeometry, [])
-  const blue = useMemo(() => courtTexture('#2c5d8f', 'court-blue'), [])
-  const green = useMemo(() => {
-    const t = courtTexture('#3d7656', 'court-green').clone()
-    t.repeat.set(10, 18)
-    t.needsUpdate = true
-    return t
-  }, [])
-  const rough = useMemo(() => courtRoughness(), [])
+  const m = useSurfaceMaterials()
   const grass = useMemo(() => grassTexture(), [])
 
   return (
@@ -55,21 +109,23 @@ export function Court() {
         <planeGeometry args={[600, 600]} />
         <meshStandardMaterial map={grass} roughness={1} color="#a8b893" />
       </mesh>
-      {/* Concrete apron around the venue */}
+      {/* Paved apron around the venue */}
       <mesh rotation-x={-Math.PI / 2} position-y={-0.01} receiveShadow>
-        <planeGeometry args={[COURT.fenceX * 2 + 12, COURT.fenceZ * 2 + 10]} />
-        <meshStandardMaterial color="#b9b2a3" roughness={0.95} />
+        <planeGeometry args={[COURT.fenceX * 2 + 16, COURT.fenceZ * 2 + 14]} />
+        <meshStandardMaterial color="#c9bfae" roughness={0.95} />
       </mesh>
-      {/* Green run-off */}
+      {/* Run-off */}
       <mesh rotation-x={-Math.PI / 2} position-y={0} receiveShadow>
         <planeGeometry args={[COURT.fenceX * 2, COURT.fenceZ * 2]} />
-        <meshStandardMaterial map={green} roughnessMap={rough} roughness={0.9} />
+        <meshStandardMaterial map={m.outer} roughnessMap={m.rough} roughness={m.outerRough} color={m.outerTint} />
       </mesh>
-      {/* Blue playing area */}
+      {/* Playing area */}
       <mesh rotation-x={-Math.PI / 2} position-y={0.001} receiveShadow>
         <planeGeometry args={[DW * 2, L * 2]} />
-        <meshStandardMaterial map={blue} roughnessMap={rough} roughness={0.82} />
+        <meshStandardMaterial map={m.inner} roughnessMap={m.rough} roughness={m.innerRough} />
       </mesh>
+      {m.surface === 'grass' ? <Wear color="#b49a6a" opacity={0.42} /> : null}
+      {m.surface === 'clay' ? <Wear color="#8f3f1f" opacity={0.25} /> : null}
       <mesh geometry={lines} receiveShadow>
         <meshStandardMaterial color="#f3f4ef" roughness={0.55} polygonOffset polygonOffsetFactor={-2} />
       </mesh>

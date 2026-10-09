@@ -73,6 +73,7 @@ function TimingGrade() {
 function LiveReadouts() {
   const meter = useRef<HTMLDivElement>(null)
   const fill = useRef<HTMLDivElement>(null)
+  const call = useRef<HTMLDivElement>(null)
   const speed = useRef<HTMLSpanElement>(null)
   const windArrow = useRef<HTMLSpanElement>(null)
   const windText = useRef<HTMLSpanElement>(null)
@@ -81,9 +82,24 @@ function LiveReadouts() {
     let lastKmh = -1
     const tick = () => {
       const m = hudLive.tossMeter
-      if (meter.current && fill.current) {
-        meter.current.style.opacity = m === null ? '0' : '1'
-        fill.current.style.transform = `scaleY(${m ?? 0})`
+      const stage = hudLive.serveStage
+      if (meter.current && fill.current && call.current) {
+        meter.current.dataset.stage = stage ?? 'off'
+        fill.current.style.left = `${(m ?? 0) * 100}%`
+        let text = 'Hold a shot key to toss'
+        let state = 'idle'
+        if (stage === 'toss' && m !== null) {
+          const y = SERVE.handHeight + m * (SERVE.apex - SERVE.handHeight)
+          if (y >= SERVE.perfectY[0]) [text, state] = ['Now!', 'perfect']
+          else if (y >= SERVE.goodY[0]) [text, state] = [hudLive.tossFalling ? 'Hit it!' : 'Almost…', 'good']
+          else
+            [text, state] = [
+              hudLive.tossFalling ? 'Too late — let it drop to re-toss' : 'Wait for the top…',
+              hudLive.tossFalling ? 'late' : 'idle',
+            ]
+        }
+        if (call.current.textContent !== text) call.current.textContent = text
+        call.current.dataset.state = state
       }
       const kmh = Math.round(hudLive.lastShotKmh)
       if (speed.current && kmh !== lastKmh) {
@@ -101,24 +117,52 @@ function LiveReadouts() {
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
   }, [])
-  const lo = (SERVE.perfectY[0] - SERVE.handHeight) / (3.15 - SERVE.handHeight)
-  const hi = (SERVE.perfectY[1] - SERVE.handHeight) / (3.15 - SERVE.handHeight)
+  const span = SERVE.apex - SERVE.handHeight
+  const lo = (SERVE.perfectY[0] - SERVE.handHeight) / span
+  const hi = Math.min(1, (SERVE.perfectY[1] - SERVE.handHeight) / span)
+  const goodLo = (SERVE.goodY[0] - SERVE.handHeight) / span
   return (
     <>
-      <div className="toss" ref={meter} aria-hidden>
-        <div className="toss-label">Toss</div>
-        <div className="toss-track">
-          <div className="toss-zone" style={{ bottom: `${lo * 100}%`, height: `${(hi - lo) * 100}%` }} />
-          <div className="toss-fill" ref={fill} />
+      <div className="serve-panel" ref={meter} data-stage="off" aria-live="polite">
+        <div className="serve-steps">
+          <span className="step aim">
+            <kbd>←</kbd>
+            <kbd>→</kbd> aim
+          </span>
+          <span className="step toss">hold a shot key to toss</span>
+          <span className="step hit">release in the zone</span>
         </div>
-        <div className="toss-hint">Release in the zone</div>
+        <div className="serve-meter" aria-hidden>
+          <div className="serve-good" style={{ left: `${goodLo * 100}%`, width: `${(lo - goodLo) * 100}%` }} />
+          <div className="serve-perfect" style={{ left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }} />
+          <div className="serve-ball" ref={fill} />
+        </div>
+        <div className="serve-call" ref={call}>
+          Hold a shot key to toss
+        </div>
+        <div className="serve-keys">
+          <span>
+            <kbd>W</kbd> flat
+          </span>
+          <span>
+            <kbd>E</kbd> slice
+          </span>
+          <span>
+            <kbd>Q</kbd> kick
+          </span>
+          <span>
+            <kbd>R</kbd> safe
+          </span>
+        </div>
       </div>
       <div className="speed">
         <span ref={speed}>–</span>
         <small>km/h last shot</small>
       </div>
       <div className="wind" aria-label="Wind">
-        <span className="wind-arrow" ref={windArrow}>↑</span>
+        <span className="wind-arrow" ref={windArrow}>
+          ↑
+        </span>
         <span>
           <small>Wind</small>
           <span ref={windText}>0 km/h</span>
@@ -131,12 +175,24 @@ function LiveReadouts() {
 function Controls() {
   return (
     <div className="controls" aria-label="Controls">
-      <span><kbd>←↑↓→</kbd> move / aim</span>
-      <span><kbd>Q</kbd> topspin</span>
-      <span><kbd>W</kbd> flat</span>
-      <span><kbd>E</kbd> slice</span>
-      <span><kbd>R</kbd> lob</span>
-      <span><kbd>Esc</kbd> pause</span>
+      <span>
+        <kbd>←↑↓→</kbd> move / aim
+      </span>
+      <span>
+        <kbd>Q</kbd> topspin
+      </span>
+      <span>
+        <kbd>W</kbd> flat
+      </span>
+      <span>
+        <kbd>E</kbd> slice
+      </span>
+      <span>
+        <kbd>R</kbd> lob
+      </span>
+      <span>
+        <kbd>Esc</kbd> pause
+      </span>
     </div>
   )
 }

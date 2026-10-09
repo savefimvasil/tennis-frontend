@@ -13,7 +13,15 @@ export function Ball() {
   const squashGroup = useRef<THREE.Group>(null!)
   const spinMesh = useRef<THREE.Mesh>(null!)
   const fx = useRef({ seen: 0, t: 1, axis: new THREE.Vector3(0, 1, 0), amount: 0 })
-  const tmp = useMemo(() => ({ R: new THREE.Quaternion(), Rinv: new THREE.Quaternion(), A: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0) }), [])
+  const tmp = useMemo(
+    () => ({
+      R: new THREE.Quaternion(),
+      Rinv: new THREE.Quaternion(),
+      A: new THREE.Quaternion(),
+      up: new THREE.Vector3(0, 1, 0),
+    }),
+    [],
+  )
 
   // Squash on impact. The squash group is kept world-aligned (it cancels the body's
   // rotation) while the inner mesh re-applies it, so the felt still visibly spins.

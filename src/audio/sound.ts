@@ -10,7 +10,8 @@ export function initAudio() {
     void ctx.resume()
     return
   }
-  const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+  const AC =
+    window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
   if (!AC) return
   ctx = new AC()
   master = ctx.createGain()
@@ -121,7 +122,14 @@ export function playApplause(strength = 1) {
   const n = Math.floor(40 + 50 * strength)
   for (let i = 0; i < n; i++) {
     const at = t + Math.random() * (1.6 + strength)
-    noiseBurst(at, 0.03, 1100 + Math.random() * 1400, 1.2, 0.05 * strength * (1 - (at - t) / 3.2), Math.random() * 1.4 - 0.7)
+    noiseBurst(
+      at,
+      0.03,
+      1100 + Math.random() * 1400,
+      1.2,
+      0.05 * strength * (1 - (at - t) / 3.2),
+      Math.random() * 1.4 - 0.7,
+    )
   }
   crowd.gain.gain.setTargetAtTime(0.04 * strength, t, 0.2)
   crowd.gain.gain.setTargetAtTime(0.015, t + 1.5, 0.8)

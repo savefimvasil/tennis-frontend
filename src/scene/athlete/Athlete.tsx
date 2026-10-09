@@ -1,12 +1,24 @@
-import { Suspense, useEffect, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
 import { sim } from '../../game/sim'
 import type { Side } from '../../game/constants'
-import { BACKHAND, FOREHAND, JOINTS, READY, SERVE_KEYS, copyPose, makePose, sampleTrack, type Joint, type Pose } from './poses'
+import {
+  BACKHAND,
+  FOREHAND,
+  JOINTS,
+  READY,
+  SERVE_KEYS,
+  copyPose,
+  makePose,
+  sampleTrack,
+  type Joint,
+  type Pose,
+} from './poses'
 import { Racket } from './Racket'
-import { ROCKETBOX_DIMS, RocketboxBody, type RocketboxHandle, type RocketboxSpec } from './Rocketbox'
+import { RocketboxBody, type RigDims, type RocketboxHandle } from './Rocketbox'
+import type { Skin } from './skins'
 
 export interface Kit {
   shirt: string
@@ -45,10 +57,27 @@ export const KITS: Record<'home' | 'away', Kit> = {
 function useMaterials(kit: Kit) {
   return useMemo(
     () => ({
-      shirt: new THREE.MeshPhysicalMaterial({ color: kit.shirt, roughness: 0.75, sheen: 0.6, sheenRoughness: 0.6, sheenColor: new THREE.Color('#ffffff') }),
+      shirt: new THREE.MeshPhysicalMaterial({
+        color: kit.shirt,
+        roughness: 0.75,
+        sheen: 0.6,
+        sheenRoughness: 0.6,
+        sheenColor: new THREE.Color('#ffffff'),
+      }),
       trim: new THREE.MeshStandardMaterial({ color: kit.trim, roughness: 0.6 }),
-      shorts: new THREE.MeshPhysicalMaterial({ color: kit.shorts, roughness: 0.8, sheen: 0.4, sheenColor: new THREE.Color('#8899bb') }),
-      skin: new THREE.MeshPhysicalMaterial({ color: kit.skin, roughness: 0.55, clearcoat: 0.08, sheen: 0.2, sheenColor: new THREE.Color('#ffcfb0') }),
+      shorts: new THREE.MeshPhysicalMaterial({
+        color: kit.shorts,
+        roughness: 0.8,
+        sheen: 0.4,
+        sheenColor: new THREE.Color('#8899bb'),
+      }),
+      skin: new THREE.MeshPhysicalMaterial({
+        color: kit.skin,
+        roughness: 0.55,
+        clearcoat: 0.08,
+        sheen: 0.2,
+        sheenColor: new THREE.Color('#ffcfb0'),
+      }),
       hair: new THREE.MeshStandardMaterial({ color: kit.hair, roughness: 0.9 }),
       shoes: new THREE.MeshStandardMaterial({ color: kit.shoes, roughness: 0.5 }),
       sole: new THREE.MeshStandardMaterial({ color: '#d8d2c4', roughness: 0.8 }),
@@ -77,7 +106,17 @@ function Joint({ r, mat }: { r: number; mat: THREE.Material }) {
   )
 }
 
-function Leg({ m, side, hip, knee }: { m: Mats; side: 1 | -1; hip: React.Ref<THREE.Group>; knee: React.Ref<THREE.Group> }) {
+function Leg({
+  m,
+  side,
+  hip,
+  knee,
+}: {
+  m: Mats
+  side: 1 | -1
+  hip: React.Ref<THREE.Group>
+  knee: React.Ref<THREE.Group>
+}) {
   return (
     <group ref={hip} position={[side * 0.095, -0.04, 0]}>
       <Joint r={0.085} mat={m.shorts} />
@@ -117,7 +156,8 @@ function Arm({
   dims: Dims
 }) {
   return (
-    <group ref={sh} position={[side * dims.shoulderX, dims.shoulderY, 0]}>
+    // XZY: twist about the arm's own axis first, then raise sideways, then swing forward/back.
+    <group ref={sh} position={[side * dims.shoulderX, dims.shoulderY, 0]} rotation-order="XZY">
       <Joint r={0.068} mat={m.shirt} />
       {/* Sleeve */}
       <mesh position-y={-0.07} material={m.shirt} castShadow>
@@ -138,12 +178,7 @@ function Arm({
   )
 }
 
-interface Dims {
-  pelvisY: number
-  spineY: number
-  shoulderY: number
-  shoulderX: number
-}
+type Dims = RigDims
 
 const PRIMITIVE_DIMS: Dims = { pelvisY: 0.95, spineY: 0.06, shoulderY: 0.43, shoulderX: 0.2 }
 
@@ -151,13 +186,15 @@ const tmpTrack = makePose()
 const tmpRun = makePose()
 
 /** A stylised athlete with procedural animation driven by the simulation state. */
-export function Athlete({ side, kit, model }: { side: Side; kit: Kit; model?: RocketboxSpec }) {
+export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin }) {
   const m = useMaterials(kit)
-  // With a skinned model the primitive body becomes an invisible driver rig (racket stays visible).
-  const dims = model ? ROCKETBOX_DIMS : PRIMITIVE_DIMS
+  // With a skinned avatar the primitive body becomes an invisible driver rig sized to its skeleton.
+  const [modelDims, setModelDims] = useState<Dims | null>(null)
+  const onDims = useCallback((d: Dims) => setModelDims(d), [])
+  const dims = (skin && modelDims) || PRIMITIVE_DIMS
   useEffect(() => {
-    for (const mat of Object.values(m)) mat.visible = !model
-  }, [m, model])
+    for (const mat of Object.values(m)) mat.visible = !skin
+  }, [m, skin])
   const body = useRef<RocketboxHandle>(null)
   const jointMap = useRef<Record<Joint | 'pelvis', THREE.Object3D> | null>(null)
   const root = useRef<THREE.Group>(null!)
@@ -311,9 +348,9 @@ export function Athlete({ side, kit, model }: { side: Side; kit: Kit; model?: Ro
 
   return (
     <group ref={root}>
-      {model ? (
+      {skin ? (
         <Suspense fallback={null}>
-          <RocketboxBody spec={model} handle={body} />
+          <RocketboxBody key={skin.id} skin={skin} frame={kit.frame} handle={body} onDims={onDims} />
         </Suspense>
       ) : null}
       <group ref={pelvis} position-y={dims.pelvisY}>
@@ -358,9 +395,7 @@ export function Athlete({ side, kit, model }: { side: Side; kit: Kit; model?: Ro
           </group>
           <Arm m={m} side={1} sh={refs.lSh} el={refs.lEl} dims={dims} />
           <Arm m={m} side={-1} sh={refs.rSh} el={refs.rEl} dims={dims}>
-            <group ref={refs.rWr}>
-              <Racket frame={kit.frame} />
-            </group>
+            <group ref={refs.rWr}>{skin ? null : <Racket frame={kit.frame} />}</group>
           </Arm>
         </group>
       </group>

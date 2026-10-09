@@ -23,8 +23,22 @@ function stripGeometry(top: (x: number) => number, bottom: (x: number) => number
 }
 
 export function Net() {
-  const mesh = useMemo(() => stripGeometry((x) => netHeightAt(x) - 0.03, () => 0.03), [])
-  const tape = useMemo(() => stripGeometry((x) => netHeightAt(x) + 0.005, (x) => netHeightAt(x) - 0.06), [])
+  const mesh = useMemo(
+    () =>
+      stripGeometry(
+        (x) => netHeightAt(x) - 0.03,
+        () => 0.03,
+      ),
+    [],
+  )
+  const tape = useMemo(
+    () =>
+      stripGeometry(
+        (x) => netHeightAt(x) + 0.005,
+        (x) => netHeightAt(x) - 0.06,
+      ),
+    [],
+  )
   const alpha = useMemo(() => {
     const t = netTexture().clone()
     t.repeat.set((PX * 2) / 0.045, 1 / 0.045)

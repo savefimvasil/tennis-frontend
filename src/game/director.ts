@@ -2,8 +2,31 @@ import { AI, BALL, COURT, HUMAN, halfSign, other, type Side } from './constants'
 import { isDeuceCourt } from './scoring'
 import { hudLive, useGame } from './store'
 import { pushEvent, sim, type Athlete } from './sim'
-import { AI_LEVELS, GRADE_EFFECT, PLAYER, SERVE, SERVES, SHOTS, TIMING, type Grade, type ShotType } from './tuning'
-import { aeroForce, applyBounce, setWind, wind, inServiceBox, inSinglesCourt, simulate, solveShot, type V3 } from '../physics/flight'
+import {
+  AI_LEVELS,
+  GRADE_EFFECT,
+  PACE,
+  PLAYER,
+  RACKET_EA,
+  RALLY_BALL_SPEED,
+  SERVE,
+  SERVES,
+  SHOTS,
+  TIMING,
+  type Grade,
+  type ShotType,
+} from './tuning'
+import {
+  aeroForce,
+  applyBounce,
+  setWind,
+  wind,
+  inServiceBox,
+  inSinglesCourt,
+  simulate,
+  solveShot,
+  type V3,
+} from '../physics/flight'
 import { pollInput, type InputState } from '../input/input'
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
@@ -12,7 +35,6 @@ import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
 const force: V3 = { x: 0, y: 0, z: 0 }
 let serveClock = 0
-let tossRelease = false
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 
@@ -60,9 +82,10 @@ export function resetForServe() {
   sim.receiverTouched = false
   sim.landing = null
   sim.prediction = null
-  tossRelease = false
   aiLetGo = false
   serveClock = 0
+  sim.serveAim = 0
+  sim.serveTarget = null
   hudLive.tossMeter = null
   // Coastal breeze: drifts a little between points, occasionally gusting.
   const angle = Math.atan2(wind.z, wind.x) + (Math.random() - 0.5) * 0.9
@@ -164,6 +187,13 @@ function strike(
   // Depth scatters more than direction for real groundstrokes.
   let tx = target.x + gauss() * errScale * 0.75
   let tz = target.z + gauss() * errScale
+  // Early contact pulls the ball across the body, late contact pushes it the other way.
+  if (!serve && (grade === 'early' || grade === 'late')) {
+    const r = right(a)
+    const hand = a.swing === 'backhand' ? -1 : 1
+    const bias = (grade === 'early' ? -1 : 1) * hand * (0.8 + Math.random() * 0.7)
+    tx += r.x * bias
+  }
   if (miss === 'long') tz += Math.sign(tz) * (COURT.halfLength - Math.abs(tz) + 0.4 + Math.random() * 1.2)
   if (miss === 'wide') tx = Math.sign(tx || 1) * (COURT.singlesHalfWidth + 0.3 + Math.random() * 1)
   const spec = serve ? SERVES[shot] : SHOTS[shot]
@@ -172,11 +202,16 @@ function strike(
   if ((grade === 'early' || grade === 'late') && Math.random() < 0.3) netClearance -= 0.25 + Math.random() * 0.3
   if (miss === 'net') netClearance = -0.35 - Math.random() * 0.3
   const lowBall = from.y < 0.45 && !serve ? 0.85 : 1
+  const st = useGame.getState()
+  const swing = PACE[st.pace] * (side === AI ? AI_LEVELS[st.difficulty].pace : 1)
+  // Racket impact: part of the incoming ball's speed comes back (v_out = eA v_in + (1 + eA) V_racket).
+  const rebound = serve || shot === 'lob' ? 0 : Math.max(-3, Math.min(8, RACKET_EA * (pace - RALLY_BALL_SPEED)))
   const sol = solveShot({
     from,
     target: { x: tx, z: tz },
-    speed: spec.speed * eff.pace * lowBall,
+    speed: spec.speed * eff.pace * lowBall * swing + rebound,
     spin: spec.spin * (grade === 'perfect' ? 1.1 : 1),
+    sidespin: serve ? SERVES[shot].sidespin : 0,
     netClearance,
     lobPitch: serve ? undefined : SHOTS[shot].lobPitch,
   })
@@ -309,6 +344,8 @@ function hitServe(side: Side, shot: ShotType, grade: Grade, aimX: number) {
   a.swingT = 1
   a.tossing = false
   hudLive.tossMeter = null
+  hudLive.serveStage = null
+  sim.serveTarget = null
   strike(side, second && shot === 'flat' ? 'topspin' : shot, grade, t, true)
 }
 
@@ -324,7 +361,6 @@ function tossBall(a: Athlete, shot: ShotType) {
   ball.setTranslation(p, true)
   ball.setLinvel({ x: 0, y: SERVE.tossSpeed, z: 0 }, true)
   ball.setAngvel({ x: 0, y: 0, z: 0 }, true)
-  tossRelease = false
 }
 
 function serveGrade(y: number, vy: number): Grade {
@@ -349,28 +385,29 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   const serving = sim.phase === 'serve' && sim.server === HUMAN && sim.lastHitter === null
 
   if (serving) {
+    // GTA-style serve: the server stays put; the arrows sweep the aim marker across the box.
     a.vx = a.vz = 0
+    sim.serveAim = Math.max(-1, Math.min(1, sim.serveAim + input.moveX * SERVE.aimRate * dt))
+    sim.serveTarget = serveTarget(HUMAN, sim.serveAim, sim.serveNumber === 2)
     if (sim.held) {
-      const xs = serverXSign(HUMAN, sim.deuceCourt)
-      a.x += input.moveX * 2.2 * dt
-      const lo = xs > 0 ? 0.25 : -3.8
-      const hi = xs > 0 ? 3.8 : -0.25
-      a.x = Math.max(lo, Math.min(hi, a.x))
+      hudLive.serveStage = 'aim'
       if (input.pressed.length) tossBall(a, input.pressed[input.pressed.length - 1])
       return
     }
-    // Tossing: release the button (or press again) to hit.
-    hudLive.tossMeter = Math.max(0, Math.min(1, (p.y - SERVE.handHeight) / (3.15 - SERVE.handHeight)))
-    if (input.released.includes(a.swingShot) || input.pressed.length) tossRelease = true
-    if (tossRelease && (p.y >= 2.15 || v.y < 0)) {
+    // Tossing: release the button (or press again) to hit, ideally near the top of the toss.
+    hudLive.serveStage = 'toss'
+    hudLive.tossMeter = Math.max(0, Math.min(1, (p.y - SERVE.handHeight) / (SERVE.apex - SERVE.handHeight)))
+    hudLive.tossFalling = v.y < 0
+    if (input.released.includes(a.swingShot) || input.pressed.length) {
       const grade = serveGrade(p.y, v.y)
       useGame.getState().showTiming(grade)
-      hitServe(HUMAN, a.swingShot, grade, input.moveX)
+      hitServe(HUMAN, a.swingShot, grade, sim.serveAim)
       return
     }
     if (v.y < 0 && p.y < 1.25) retoss(a)
     return
   }
+  hudLive.serveStage = null
 
   if (sim.phase === 'dead' || sim.phase === 'idle') {
     moveAthlete(a, 0, 0, PLAYER.speed, dt)
@@ -468,7 +505,9 @@ function updateAI(dt: number, p: V3, v: V3) {
     // Decide once whether to leave a ball that is going out.
     if (sim.landing && sim.bounces === 0 && !aiLetGo) {
       const out = !inSinglesCourt(sim.landing.x, sim.landing.z, -1)
-      const serveOut = sim.phase === 'serve' && !inServiceBox(sim.landing.x, sim.landing.z, -1, -serverXSign(HUMAN, sim.deuceCourt) as 1 | -1)
+      const serveOut =
+        sim.phase === 'serve' &&
+        !inServiceBox(sim.landing.x, sim.landing.z, -1, -serverXSign(HUMAN, sim.deuceCourt) as 1 | -1)
       if ((out || serveOut) && Math.random() < spec.readsOut) aiLetGo = true
     }
   } else if (sim.lastHitter === AI) {
@@ -504,7 +543,11 @@ function updateAI(dt: number, p: V3, v: V3) {
     const grade = pickGrade(spec)
     // Pace and awkward height make errors more likely.
     const pace = Math.hypot(v.x, v.y, v.z)
-    const pressure = 1 + Math.max(0, pace - 22) / 25 + (p.y < 0.4 || p.y > 1.9 ? 0.5 : 0) + Math.max(0, Math.abs(win.lateral) - 0.9) / 2
+    const pressure =
+      1 +
+      Math.max(0, pace - 22) / 25 +
+      (p.y < 0.4 || p.y > 1.9 ? 0.5 : 0) +
+      Math.max(0, Math.abs(win.lateral) - 0.9) / 2
     let miss: Miss = null
     if (Math.random() < spec.unforced * pressure) {
       const r = Math.random()

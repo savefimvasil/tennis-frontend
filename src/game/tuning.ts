@@ -18,12 +18,25 @@ export const SHOTS: Record<ShotType, ShotSpec> = {
   flat: { speed: 36, spin: 70, netClearance: 0.18, depth: 9.6 },
 }
 
-export const SERVES: Record<ShotType, { speed: number; spin: number; netClearance: number }> = {
-  flat: { speed: 52, spin: 60, netClearance: 0.04 },
-  topspin: { speed: 43, spin: 230, netClearance: 0.3 },
-  slice: { speed: 44, spin: 120, netClearance: 0.12 },
-  lob: { speed: 34, spin: 150, netClearance: 0.4 },
+/**
+ * Serve types for a right-hander. sidespin > 0 curves the ball to the server's left (slice),
+ * < 0 to the right (kick).
+ */
+export const SERVES: Record<ShotType, { speed: number; spin: number; sidespin: number; netClearance: number }> = {
+  flat: { speed: 52, spin: 60, sidespin: 0, netClearance: 0.04 },
+  topspin: { speed: 40, spin: 260, sidespin: -90, netClearance: 0.3 },
+  slice: { speed: 44, spin: 80, sidespin: 200, netClearance: 0.12 },
+  lob: { speed: 34, spin: 150, sidespin: 0, netClearance: 0.4 },
 }
+
+/** Racket's apparent coefficient of restitution: share of the incoming speed returned. */
+export const RACKET_EA = 0.4
+/** Incoming speed already baked into the SHOTS speeds (a typical rally ball, m/s). */
+export const RALLY_BALL_SPEED = 22
+
+export type PaceId = 'club' | 'tour'
+/** Swing speed multiplier. Club pace is closer to GTA: slower, loopier rallies. */
+export const PACE: Record<PaceId, number> = { club: 0.78, tour: 1 }
 
 export type Grade = 'perfect' | 'good' | 'early' | 'late'
 
@@ -44,10 +57,10 @@ export const TIMING = {
 }
 
 export const PLAYER = {
-  speed: 6.2,
-  /** Elite players reach ~5-6 m/s within 1 s; braking is quicker than accelerating. */
-  accel: 15,
-  brake: 26,
+  speed: 6.0,
+  /** Players reach ~5 m/s in about a second; braking is quicker than accelerating. */
+  accel: 9,
+  brake: 18,
   swingSlow: 0.45,
   /** Max sideways distance from body to ball at contact. */
   reach: 1.55,
@@ -62,10 +75,14 @@ export const PLAYER = {
 
 export const SERVE = {
   baselineGap: 0.35,
-  tossSpeed: 5.3,
+  /** Toss apex ~3.05 m, ~0.57 s after release: contact near the top, as real servers do. */
+  tossSpeed: 5.6,
   handHeight: 1.45,
-  perfectY: [2.62, 3.05] as const,
-  goodY: [2.25, 3.3] as const,
+  apex: 1.45 + (5.6 * 5.6) / (2 * 9.81),
+  perfectY: [2.85, 3.2] as const,
+  goodY: [2.5, 3.2] as const,
+  /** How fast the arrow keys sweep the serve aim across the box (full width per second). */
+  aimRate: 1.6,
 }
 
 export type Difficulty = 'easy' | 'pro' | 'ace'
@@ -73,6 +90,8 @@ export type Difficulty = 'easy' | 'pro' | 'ace'
 export interface AiSpec {
   speed: number
   reaction: number
+  /** Swing speed relative to the player's. */
+  pace: number
   /** Probabilities of the AI's timing grade. */
   grades: Record<Grade, number>
   /** Chance of letting an out ball go. */
@@ -85,30 +104,33 @@ export interface AiSpec {
 
 export const AI_LEVELS: Record<Difficulty, AiSpec> = {
   easy: {
-    speed: 4.9,
-    reaction: 0.32,
-    grades: { perfect: 0.1, good: 0.5, early: 0.2, late: 0.2 },
-    readsOut: 0.3,
-    aimMargin: 1.5,
-    serveFirst: 0.55,
-    unforced: 0.07,
+    speed: 4.3,
+    reaction: 0.45,
+    pace: 0.85,
+    grades: { perfect: 0.05, good: 0.45, early: 0.25, late: 0.25 },
+    readsOut: 0.2,
+    aimMargin: 1.9,
+    serveFirst: 0.5,
+    unforced: 0.11,
   },
   pro: {
-    speed: 5.8,
-    reaction: 0.2,
+    speed: 5.6,
+    reaction: 0.22,
+    pace: 1,
     grades: { perfect: 0.3, good: 0.5, early: 0.1, late: 0.1 },
     readsOut: 0.7,
     aimMargin: 1.3,
     serveFirst: 0.68,
-    unforced: 0.03,
+    unforced: 0.05,
   },
   ace: {
     speed: 6.6,
-    reaction: 0.12,
-    grades: { perfect: 0.55, good: 0.4, early: 0.03, late: 0.02 },
-    readsOut: 0.95,
-    aimMargin: 1.0,
-    serveFirst: 0.78,
-    unforced: 0.012,
+    reaction: 0.1,
+    pace: 1.12,
+    grades: { perfect: 0.65, good: 0.33, early: 0.01, late: 0.01 },
+    readsOut: 0.97,
+    aimMargin: 0.8,
+    serveFirst: 0.8,
+    unforced: 0.015,
   },
 }

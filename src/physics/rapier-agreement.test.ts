@@ -15,13 +15,27 @@ function rapierFlight(p: V3, v: V3, w: V3, seconds: number) {
   world.timestep = PHYSICS.timeStep
   const ground = world.createRigidBody(RAPIER.RigidBodyDesc.fixed())
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(60, 0.5, 60).setTranslation(0, -0.5, 0).setRestitution(BALL.restitution).setFriction(BALL.friction),
+    RAPIER.ColliderDesc.cuboid(60, 0.5, 60)
+      .setTranslation(0, -0.5, 0)
+      .setRestitution(BALL.restitution)
+      .setFriction(BALL.friction),
     ground,
   )
   const ball = world.createRigidBody(
-    RAPIER.RigidBodyDesc.dynamic().setTranslation(p.x, p.y, p.z).setLinvel(v.x, v.y, v.z).setAngvel(w).setCcdEnabled(true).setAngularDamping(0.05),
+    RAPIER.RigidBodyDesc.dynamic()
+      .setTranslation(p.x, p.y, p.z)
+      .setLinvel(v.x, v.y, v.z)
+      .setAngvel(w)
+      .setCcdEnabled(true)
+      .setAngularDamping(0.05),
   )
-  world.createCollider(RAPIER.ColliderDesc.ball(BALL.radius).setMass(BALL.mass).setRestitution(BALL.restitution).setFriction(BALL.friction), ball)
+  world.createCollider(
+    RAPIER.ColliderDesc.ball(BALL.radius)
+      .setMass(BALL.mass)
+      .setRestitution(BALL.restitution)
+      .setFriction(BALL.friction),
+    ball,
+  )
   const f: V3 = { x: 0, y: 0, z: 0 }
   const bounces: { x: number; z: number; vxAfter: number; vzAfter: number; vyAfter: number }[] = []
   let prev = { v: ball.linvel(), w: ball.angvel(), p: ball.translation() }
@@ -59,7 +73,15 @@ describe('predictor vs Rapier', () => {
     expect(Math.hypot(real[0].x - pred.bounces[0].x, real[0].z - pred.bounces[0].z)).toBeLessThan(0.3)
     // Second bounce tests the post-bounce model (restitution, friction, spin kick).
     const d2 = Math.hypot(real[1].x - pred.bounces[1].x, real[1].z - pred.bounces[1].z)
-    console.log(_name, 'bounce1 err', Math.hypot(real[0].x - pred.bounces[0].x, real[0].z - pred.bounces[0].z).toFixed(3), 'bounce2 err', d2.toFixed(3), 'vy after', real[0].vyAfter.toFixed(2))
+    console.log(
+      _name,
+      'bounce1 err',
+      Math.hypot(real[0].x - pred.bounces[0].x, real[0].z - pred.bounces[0].z).toFixed(3),
+      'bounce2 err',
+      d2.toFixed(3),
+      'vy after',
+      real[0].vyAfter.toFixed(2),
+    )
     // Within roughly one physics step of travel; the AI re-predicts from the real ball after each bounce.
     expect(d2).toBeLessThan(0.7)
   })

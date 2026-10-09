@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { awardPoint, FORMATS, newMatch, type FormatId, type MatchState, type PointOutcome } from './scoring'
 import type { Side } from './constants'
-import type { Difficulty, Grade } from './tuning'
+import type { Difficulty, Grade, PaceId } from './tuning'
+import { setSurface, type SurfaceId } from '../physics/flight'
 
 export type Screen = 'menu' | 'playing' | 'paused' | 'over'
 
@@ -19,6 +20,10 @@ interface GameStore {
   difficulty: Difficulty
   format: FormatId
   quality: Quality
+  pace: PaceId
+  surface: SurfaceId
+  /** Player's character/outfit id (see scene/athlete/skins.ts). */
+  skin: string
   match: MatchState
   serveNumber: 1 | 2
   toast: Toast | null
@@ -28,6 +33,9 @@ interface GameStore {
   setDifficulty(d: Difficulty): void
   setFormat(f: FormatId): void
   setQuality(q: Quality): void
+  setPace(p: PaceId): void
+  setSurface(s: SurfaceId): void
+  setSkin(s: string): void
   toggleMute(): void
   start(): void
   pause(): void
@@ -51,6 +59,9 @@ export const useGame = create<GameStore>((set, get) => ({
   difficulty: 'pro',
   format: 'quick',
   quality: 'high',
+  pace: 'club',
+  surface: 'hard',
+  skin: 'navy',
   match: newMatch(FORMATS.quick, 0),
   serveNumber: 1,
   toast: null,
@@ -60,6 +71,12 @@ export const useGame = create<GameStore>((set, get) => ({
   setDifficulty: (difficulty) => set({ difficulty }),
   setFormat: (format) => set({ format }),
   setQuality: (quality) => set({ quality }),
+  setPace: (pace) => set({ pace }),
+  setSurface: (surface) => {
+    setSurface(surface)
+    set({ surface })
+  },
+  setSkin: (skin) => set({ skin }),
   toggleMute: () => set({ muted: !get().muted }),
   start: () =>
     set({
@@ -104,4 +121,6 @@ export const hudLive = {
   ballSpeedKmh: 0,
   lastShotKmh: 0,
   wind: { x: 0, z: 0 },
+  serveStage: null as 'aim' | 'toss' | null,
+  tossFalling: false,
 }

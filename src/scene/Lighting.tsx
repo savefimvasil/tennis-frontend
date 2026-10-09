@@ -45,10 +45,31 @@ export function Lighting({ shadowSize }: { shadowSize: number }) {
       />
       <Environment resolution={256} frames={1} environmentIntensity={0.55}>
         {/* Sky dome tint and a warm sun card for glossy reflections */}
-        <Lightformer form="rect" intensity={1.2} color="#bcd4ef" scale={[60, 30, 1]} position={[0, 18, 0]} rotation-x={Math.PI / 2} />
-        <Lightformer form="circle" intensity={6} color="#ffd9a8" scale={8} position={SUN_DIR.clone().multiplyScalar(30).toArray()} target={[0, 0, 0]} />
+        <Lightformer
+          form="rect"
+          intensity={1.2}
+          color="#bcd4ef"
+          scale={[60, 30, 1]}
+          position={[0, 18, 0]}
+          rotation-x={Math.PI / 2}
+        />
+        <Lightformer
+          form="circle"
+          intensity={6}
+          color="#ffd9a8"
+          scale={8}
+          position={SUN_DIR.clone().multiplyScalar(30).toArray()}
+          target={[0, 0, 0]}
+        />
         <Lightformer form="rect" intensity={0.6} color="#7d9a6a" scale={[60, 6, 1]} position={[0, -2, -30]} />
-        <Lightformer form="rect" intensity={0.8} color="#f1e3cf" scale={[40, 8, 1]} position={[-30, 4, 0]} rotation-y={Math.PI / 2} />
+        <Lightformer
+          form="rect"
+          intensity={0.8}
+          color="#f1e3cf"
+          scale={[40, 8, 1]}
+          position={[-30, 4, 0]}
+          rotation-y={Math.PI / 2}
+        />
       </Environment>
     </>
   )

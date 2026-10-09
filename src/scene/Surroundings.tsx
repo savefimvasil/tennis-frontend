@@ -3,7 +3,15 @@ import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { COURT } from '../game/constants'
-import { barkTexture, chainLinkTexture, frondTexture, rng, windowsTexture, windscreenTexture } from './textures'
+import {
+  barkTexture,
+  chainLinkTexture,
+  frondTexture,
+  hedgeTexture,
+  rng,
+  windowsTexture,
+  windscreenTexture,
+} from './textures'
 
 const FX = COURT.fenceX
 const FZ = COURT.fenceZ
@@ -14,7 +22,15 @@ const dummy = new THREE.Object3D()
 
 // ------------------------------------------------------------------ fence
 
-function FenceSide({ length, position, rotationY }: { length: number; position: [number, number, number]; rotationY: number }) {
+function FenceSide({
+  length,
+  position,
+  rotationY,
+}: {
+  length: number
+  position: [number, number, number]
+  rotationY: number
+}) {
   const chain = useMemo(() => {
     const t = chainLinkTexture().clone()
     t.repeat.set(length / 0.07, FH / 0.07)
@@ -31,7 +47,14 @@ function FenceSide({ length, position, rotationY }: { length: number; position: 
     <group position={position} rotation-y={rotationY}>
       <mesh position-y={FH / 2}>
         <planeGeometry args={[length, FH]} />
-        <meshStandardMaterial color="#26332d" alphaMap={chain} alphaTest={0.5} side={THREE.DoubleSide} metalness={0.4} roughness={0.6} />
+        <meshStandardMaterial
+          color="#26332d"
+          alphaMap={chain}
+          alphaTest={0.5}
+          side={THREE.DoubleSide}
+          metalness={0.4}
+          roughness={0.6}
+        />
       </mesh>
       <mesh position={[0, WIND_H / 2 + 0.05, 0.02]} receiveShadow>
         <planeGeometry args={[length, WIND_H]} />
@@ -78,7 +101,18 @@ function FencePosts() {
 
 // ------------------------------------------------------------------ stands + crowd
 
-const SHIRTS = ['#e8e4dc', '#2b4f7e', '#c6463f', '#f0c24b', '#3b7a57', '#1e1e24', '#d97a3a', '#7aa6d9', '#ffffff', '#9a5ba8']
+const SHIRTS = [
+  '#e8e4dc',
+  '#2b4f7e',
+  '#c6463f',
+  '#f0c24b',
+  '#3b7a57',
+  '#1e1e24',
+  '#d97a3a',
+  '#7aa6d9',
+  '#ffffff',
+  '#9a5ba8',
+]
 const SKINS = ['#f1c9a5', '#d9a77f', '#b07c57', '#8d5a3b', '#5e3b25']
 
 function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number; length?: number; facing: 1 | -1 }) {
@@ -209,10 +243,28 @@ function Palms() {
     const r = rng(99)
     const list: { x: number; z: number; s: number; ry: number }[] = []
     const ring = [
-      [-16, -26], [-6, -27], [7, -26.5], [17, -25], [-24, -14], [-23, 2], [-24, 16], [24, -12], [25, 4],
-      [23, 18], [-14, 27], [0, 28], [13, 27.5], [-34, -30], [34, -32], [-40, 8], [42, 12], [-30, 34], [30, 36],
+      [-16, -23.6],
+      [-6, -23.8],
+      [7, -23.6],
+      [17, -23.7],
+      [-24, -14],
+      [-23, 2],
+      [-24, 16],
+      [24, -12],
+      [25, 4],
+      [23, 18],
+      [-14, 27],
+      [0, 28],
+      [13, 27.5],
+      [-34, -30],
+      [34, -32],
+      [-40, 8],
+      [42, 12],
+      [-30, 34],
+      [30, 36],
     ]
-    for (const [x, z] of ring) list.push({ x: x + (r() - 0.5) * 3, z: z + (r() - 0.5) * 3, s: 0.85 + r() * 0.5, ry: r() * Math.PI * 2 })
+    for (const [x, z] of ring)
+      list.push({ x: x + (r() - 0.5) * 3, z: z + (r() - 0.5) * 3, s: 0.85 + r() * 0.5, ry: r() * Math.PI * 2 })
     return list
   }, [])
   useLayoutEffect(() => {
@@ -269,7 +321,12 @@ function UmpireChair() {
   const x = -(COURT.netPostX + 1.1)
   return (
     <group position={[x, 0, 0]} rotation-y={Math.PI / 2}>
-      {[[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]].map(([a, b], i) => (
+      {[
+        [-0.35, -0.35],
+        [0.35, -0.35],
+        [-0.35, 0.35],
+        [0.35, 0.35],
+      ].map(([a, b], i) => (
         <mesh key={i} position={[a, 1, b]} castShadow>
           <cylinderGeometry args={[0.03, 0.04, 2, 8]} />
           <meshStandardMaterial color="#e9e9e4" roughness={0.4} metalness={0.3} />
@@ -413,6 +470,89 @@ function Hills() {
   )
 }
 
+/** Clubhouse behind the far court: white stucco, terracotta roof, arched openings and a terrace. */
+function Clubhouse() {
+  const z = -FZ - 12
+  const width = 34
+  const arches = Array.from({ length: 9 }, (_, i) => -width / 2 + 3 + i * ((width - 6) / 8))
+  const umbrellas = [-12, -6, 0, 6, 12]
+  return (
+    <group position={[0, 0, z]}>
+      {/* Main block */}
+      <mesh position={[0, 3.6, -2]} castShadow receiveShadow>
+        <boxGeometry args={[width, 7.2, 8]} />
+        <meshStandardMaterial color="#efe8dc" roughness={0.9} />
+      </mesh>
+      {/* Hip roof */}
+      {/* Scale after the 45 degree turn so the pyramid stays square to the walls */}
+      <group position={[0, 8.4, -2]} scale={[width * 0.74, 1, 8 * 0.74]}>
+        <mesh rotation-y={Math.PI / 4} castShadow>
+          <coneGeometry args={[1, 2.4, 4, 1]} />
+          <meshStandardMaterial color="#b4582f" roughness={0.75} />
+        </mesh>
+      </group>
+      {/* Arched openings facing the courts */}
+      {arches.map((x) => (
+        <group key={x} position={[x, 0, 2.02]}>
+          <mesh position-y={1.6}>
+            <planeGeometry args={[1.8, 3.2]} />
+            <meshStandardMaterial color="#2b3238" roughness={0.3} metalness={0.4} />
+          </mesh>
+          <mesh position-y={3.2}>
+            <circleGeometry args={[0.9, 20, 0, Math.PI]} />
+            <meshStandardMaterial color="#2b3238" roughness={0.3} metalness={0.4} />
+          </mesh>
+          <mesh position-y={5.6}>
+            <planeGeometry args={[1.4, 1.2]} />
+            <meshStandardMaterial color="#3a4652" roughness={0.25} metalness={0.5} />
+          </mesh>
+        </group>
+      ))}
+      {/* Terrace with sun umbrellas */}
+      <mesh position={[0, 0.2, 5]} receiveShadow castShadow>
+        <boxGeometry args={[width, 0.4, 6]} />
+        <meshStandardMaterial color="#d9cdb8" roughness={0.95} />
+      </mesh>
+      {umbrellas.map((x, i) => (
+        <group key={x} position={[x, 0.4, 5]}>
+          <mesh position-y={1.2} castShadow>
+            <cylinderGeometry args={[0.04, 0.04, 2.4, 6]} />
+            <meshStandardMaterial color="#e9e4d8" />
+          </mesh>
+          <mesh position-y={2.45} castShadow>
+            <coneGeometry args={[1.5, 0.6, 12, 1, true]} />
+            <meshStandardMaterial color={i % 2 ? '#f3efe6' : '#2c5d8f'} side={THREE.DoubleSide} roughness={0.8} />
+          </mesh>
+          <mesh position-y={0.55} castShadow>
+            <cylinderGeometry args={[0.5, 0.5, 0.05, 16]} />
+            <meshStandardMaterial color="#f5f2ea" />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  )
+}
+
+/** Flowering hedges just outside the fence. */
+function Hedges() {
+  const tex = useMemo(() => hedgeTexture(), [])
+  const rows: [number, number, number, number][] = [
+    // x, z, length, rotationY
+    [0, -FZ - 1.4, FX * 2 + 2, 0],
+    [0, FZ + 1.4, FX * 2 + 2, 0],
+  ]
+  return (
+    <group>
+      {rows.map(([x, z, len, ry], i) => (
+        <mesh key={i} position={[x, 0.7, z]} rotation-y={ry} castShadow receiveShadow>
+          <boxGeometry args={[len, 1.4, 1.2]} />
+          <meshStandardMaterial map={tex} roughness={1} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) {
   return (
     <group>
@@ -424,12 +564,19 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       <UmpireChair />
       <Bench z={-1.6} />
       <Bench z={1.6} />
-      {[[-FX - 1.5, -FZ - 1.5], [FX + 1.5, -FZ - 1.5], [-FX - 1.5, FZ + 1.5], [FX + 1.5, FZ + 1.5]].map(([x, z]) => (
+      {[
+        [-FX - 1.5, -FZ - 1.5],
+        [FX + 1.5, -FZ - 1.5],
+        [-FX - 1.5, FZ + 1.5],
+        [FX + 1.5, FZ + 1.5],
+      ].map(([x, z]) => (
         <LightPole key={`${x}${z}`} x={x} z={z} />
       ))}
-      <Stand x={FX + 1.6} facing={-1} rows={detail === 'low' ? 3 : 6} length={26} />
-      {detail !== 'low' && <Stand x={-FX - 1.6} facing={1} rows={4} length={20} />}
+      <Stand x={FX + 1.6} facing={-1} rows={detail === 'low' ? 3 : 7} length={32} />
+      {detail !== 'low' && <Stand x={-FX - 1.6} facing={1} rows={5} length={26} />}
       <Palms />
+      <Hedges />
+      <Clubhouse />
       <Skyline />
       <Hills />
     </group>

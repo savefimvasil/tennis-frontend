@@ -301,3 +301,79 @@ export function radialTexture() {
     return t
   })
 }
+
+/** Red clay: sandy grain with faint brush drag marks. */
+export function clayTexture() {
+  return memo('clay', () => {
+    const size = 512
+    const { c, g } = canvas(size, size)
+    g.fillStyle = '#c4643c'
+    g.fillRect(0, 0, size, size)
+    const img = g.getImageData(0, 0, size, size)
+    const r = rng(31)
+    for (let i = 0; i < img.data.length; i += 4) {
+      const n = (r() - 0.5) * 34
+      img.data[i] += n
+      img.data[i + 1] += n * 0.8
+      img.data[i + 2] += n * 0.6
+    }
+    g.putImageData(img, 0, 0)
+    // Brush arcs left by the court sweepers.
+    g.globalAlpha = 0.07
+    for (let i = 0; i < 60; i++) {
+      g.strokeStyle = r() > 0.5 ? '#fff1dc' : '#6d2b14'
+      g.lineWidth = 1 + r() * 3
+      g.beginPath()
+      const y = r() * size
+      g.moveTo(0, y)
+      g.bezierCurveTo(size * 0.3, y + (r() - 0.5) * 40, size * 0.7, y + (r() - 0.5) * 40, size, y)
+      g.stroke()
+    }
+    return finish(c, { repeat: [6, 12] })
+  })
+}
+
+/** Mown grass: one light and one dark stripe per tile, with blade noise. */
+export function lawnTexture() {
+  return memo('lawn', () => {
+    const w = 256
+    const h = 256
+    const { c, g } = canvas(w, h)
+    g.fillStyle = '#4f8a3a'
+    g.fillRect(0, 0, w, h / 2)
+    g.fillStyle = '#3f7630'
+    g.fillRect(0, h / 2, w, h / 2)
+    const r = rng(17)
+    for (let i = 0; i < 9000; i++) {
+      const x = r() * w
+      const y = r() * h
+      g.fillStyle = `hsla(${95 + r() * 20}, ${40 + r() * 20}%, ${28 + r() * 22}%, 0.55)`
+      g.fillRect(x, y, 1, 2 + r() * 3)
+    }
+    return finish(c, { repeat: [1, 1] })
+  })
+}
+
+/** Hedge foliage with pink bougainvillea flowers. */
+export function hedgeTexture() {
+  return memo('hedge', () => {
+    const size = 256
+    const { c, g } = canvas(size, size)
+    g.fillStyle = '#2f5a2a'
+    g.fillRect(0, 0, size, size)
+    const r = rng(23)
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = `hsl(${95 + r() * 30}, ${35 + r() * 25}%, ${18 + r() * 22}%)`
+      g.beginPath()
+      g.ellipse(r() * size, r() * size, 2 + r() * 4, 1 + r() * 3, r() * Math.PI, 0, Math.PI * 2)
+      g.fill()
+    }
+    for (let i = 0; i < 260; i++) {
+      g.fillStyle = `hsl(${318 + r() * 20}, ${70 + r() * 20}%, ${50 + r() * 15}%)`
+      g.beginPath()
+      g.arc(r() * size, r() * size, 1.5 + r() * 2.5, 0, Math.PI * 2)
+      g.fill()
+    }
+    return finish(c, { repeat: [4, 1] })
+  })
+}

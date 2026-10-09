@@ -11,7 +11,8 @@ export interface V3 {
 }
 
 const RHO = 1.21
-const CD = 0.55
+/** Free-flight drag of new balls (~0.51); wind-tunnel values run 15-20% higher. */
+const CD = 0.51
 const AREA = Math.PI * BALL.radius * BALL.radius
 const K_AIR = 0.5 * RHO * AREA
 
@@ -153,7 +154,7 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
  * - Friction acts on the contact point; if it is strong enough the ball grips (rolls) instead of sliding.
  * - A tennis ball is a thick hollow shell: I = 0.55 m r^2.
  */
-export function applyBounce(v: V3, w: V3, surface: Surface = HARD_COURT) {
+export function applyBounce(v: V3, w: V3, surface: Surface = currentSurface) {
   const r = BALL.radius
   const vyIn = Math.max(0, -v.y)
   const e = Math.min(surface.eMax, Math.max(surface.eMin, surface.eMax - surface.eSlope * vyIn))
@@ -184,8 +185,38 @@ export interface Surface {
   mu: number
 }
 
-/** Medium-fast acrylic hard court (ITF pace rating ~40). */
-export const HARD_COURT: Surface = { eMax: 0.81, eMin: 0.7, eSlope: 0.006, mu: 0.6 }
+/** Vertical speed of the ITF Court Pace Rating test: 30 m/s at 16 degrees. */
+const ITF_VY = 30 * Math.sin((16 * Math.PI) / 180)
+
+/** Builds a surface whose restitution equals `e` at the ITF test impact speed. */
+function surface(mu: number, e: number): Surface {
+  const eSlope = 0.006
+  return { mu, eSlope, eMax: e + eSlope * ITF_VY, eMin: e - 0.12 }
+}
+
+/** ITF Court Pace Rating: 100(1 - mu) + 150(0.81 - e). Slow <= 29, medium 35-39, fast >= 45. */
+export function courtPaceRating(s: Surface): number {
+  const e = Math.min(s.eMax, Math.max(s.eMin, s.eMax - s.eSlope * ITF_VY))
+  return 100 * (1 - s.mu) + 150 * (0.81 - e)
+}
+
+export type SurfaceId = 'hard' | 'clay' | 'grass'
+
+export const SURFACES: Record<SurfaceId, Surface> = {
+  /** Slow (CPR ~21): high friction, high bounce. */
+  clay: surface(0.75, 0.84),
+  /** Medium-fast acrylic (CPR ~41). */
+  hard: surface(0.6, 0.8),
+  /** Fast (CPR ~50): skids low. */
+  grass: surface(0.55, 0.78),
+}
+
+export const HARD_COURT = SURFACES.hard
+let currentSurface: Surface = SURFACES.hard
+
+export function setSurface(id: SurfaceId) {
+  currentSurface = SURFACES[id]
+}
 
 /** Moment of inertia factor of a tennis ball (I = ALPHA m r^2). */
 export const ALPHA = 0.55
@@ -209,6 +240,8 @@ export interface ShotRequest {
   netClearance: number
   /** Lob mode: fixes the launch angle and solves for speed instead. */
   lobPitch?: number
+  /** Spin about the vertical axis (rad/s): positive curves the ball to its left. */
+  sidespin?: number
 }
 
 export interface ShotSolution {
@@ -226,7 +259,7 @@ function launch(req: ShotRequest, speed: number, pitch: number): { v: V3; w: V3;
   const c = Math.cos(pitch)
   const v = { x: d.x * c * speed, y: Math.sin(pitch) * speed, z: d.z * c * speed }
   const a = topspinAxis(d.x, d.z)
-  const w = { x: a.x * req.spin, y: 0, z: a.z * req.spin }
+  const w = { x: a.x * req.spin, y: req.sidespin ?? 0, z: a.z * req.spin }
   return { v, w, d }
 }
 
@@ -245,9 +278,23 @@ function clearsNet(req: ShotRequest, flight: Flight): boolean {
 
 /**
  * Finds a launch velocity that lands the ball on `target` with the requested spin,
- * lowering pace if needed to clear the net. Always returns a best effort.
+ * lowering pace if needed to clear the net. Sidespin and crosswind push the ball off
+ * line, so the aim point is corrected a few times until the landing matches.
  */
 export function solveShot(req: ShotRequest): ShotSolution {
+  let aim = { ...req.target }
+  let sol = solveOnce(req)
+  for (let i = 0; i < 4; i++) {
+    const ex = req.target.x - sol.landing.x
+    const ez = req.target.z - sol.landing.z
+    if (Math.hypot(ex, ez) < 0.06) break
+    aim = { x: aim.x + ex, z: aim.z + ez }
+    sol = solveOnce({ ...req, target: aim })
+  }
+  return sol
+}
+
+function solveOnce(req: ShotRequest): ShotSolution {
   const goal = Math.hypot(req.target.x - req.from.x, req.target.z - req.from.z)
 
   if (req.lobPitch !== undefined) {

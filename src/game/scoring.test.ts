@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { awardPoint, FORMATS, isDeuceCourt, newMatch, pointLabel, pressureLabel, scoreCall, type MatchState } from './scoring'
+import {
+  awardPoint,
+  FORMATS,
+  isDeuceCourt,
+  newMatch,
+  pointLabel,
+  pressureLabel,
+  scoreCall,
+  type MatchState,
+} from './scoring'
 import type { Side } from './constants'
 
 function play(s: MatchState, seq: string): MatchState {

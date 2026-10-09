@@ -14,8 +14,8 @@ export const COURT = {
   lineWidth: 0.05,
   baselineWidth: 0.08,
   // Run-off area enclosed by the fence.
-  fenceX: 10.5,
-  fenceZ: 19,
+  fenceX: 12.5,
+  fenceZ: 21,
   fenceHeight: 3.6,
 } as const
 
