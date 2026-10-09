@@ -84,8 +84,11 @@ function LiveReadouts() {
       const m = hudLive.tossMeter
       const stage = hudLive.serveStage
       if (meter.current && fill.current && call.current) {
-        meter.current.dataset.stage = stage ?? 'off'
-        fill.current.style.left = `${(m ?? 0) * 100}%`
+        // Only touch the DOM when something changed: writes every frame force style work.
+        const stageAttr = stage ?? 'off'
+        if (meter.current.dataset.stage !== stageAttr) meter.current.dataset.stage = stageAttr
+        const left = `${Math.round((m ?? 0) * 1000) / 10}%`
+        if (fill.current.style.left !== left) fill.current.style.left = left
         let text = 'Hold a shot key to toss'
         let state = 'idle'
         if (stage === 'toss' && m !== null) {
@@ -99,7 +102,7 @@ function LiveReadouts() {
             ]
         }
         if (call.current.textContent !== text) call.current.textContent = text
-        call.current.dataset.state = state
+        if (call.current.dataset.state !== state) call.current.dataset.state = state
       }
       const kmh = Math.round(hudLive.lastShotKmh)
       if (speed.current && kmh !== lastKmh) {
@@ -109,8 +112,10 @@ function LiveReadouts() {
       const w = hudLive.wind
       if (windArrow.current && windText.current) {
         // The camera looks down -z, so screen-up is -z and screen-right is +x.
-        windArrow.current.style.transform = `rotate(${Math.atan2(w.x, -w.z)}rad)`
-        windText.current.textContent = `${Math.round(Math.hypot(w.x, w.z) * 3.6)} km/h`
+        const rot = `rotate(${Math.atan2(w.x, -w.z).toFixed(2)}rad)`
+        if (windArrow.current.style.transform !== rot) windArrow.current.style.transform = rot
+        const wt = `${Math.round(Math.hypot(w.x, w.z) * 3.6)} km/h`
+        if (windText.current.textContent !== wt) windText.current.textContent = wt
       }
       raf = requestAnimationFrame(tick)
     }
@@ -127,10 +132,10 @@ function LiveReadouts() {
         <div className="serve-steps">
           <span className="step aim">
             <kbd>←</kbd>
-            <kbd>→</kbd> aim
+            <kbd>→</kbd> step
           </span>
           <span className="step toss">hold a shot key to toss</span>
-          <span className="step hit">release in the zone</span>
+          <span className="step hit">release in the zone · ←/→ angles it</span>
         </div>
         <div className="serve-meter" aria-hidden>
           <div className="serve-good" style={{ left: `${goodLo * 100}%`, width: `${(lo - goodLo) * 100}%` }} />

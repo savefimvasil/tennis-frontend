@@ -154,7 +154,8 @@ function HowTo() {
         aim.
       </div>
       <div>
-        <b>Serve</b> <kbd>←</kbd>/<kbd>→</kbd> moves the target, hold a shot key to toss, release in the zone.
+        <b>Serve</b> <kbd>←</kbd>/<kbd>→</kbd> steps along the baseline. Hold a shot key to toss and release in the
+        zone; hold <kbd>←</kbd>/<kbd>→</kbd> as you release to angle it wide or down the T.
       </div>
       <div>
         <b>Rally</b> Press a shot key as the ball comes in. Hold an arrow to aim; <kbd>↑</kbd> hits deeper, <kbd>↓</kbd>{' '}

@@ -190,7 +190,20 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
   const m = useMaterials(kit)
   // With a skinned avatar the primitive body becomes an invisible driver rig sized to its skeleton.
   const [modelDims, setModelDims] = useState<Dims | null>(null)
-  const onDims = useCallback((d: Dims) => setModelDims(d), [])
+  // Only update when the measurements change, so a re-render can never loop back into the avatar.
+  const onDims = useCallback(
+    (d: Dims) =>
+      setModelDims((cur) =>
+        cur &&
+        cur.pelvisY === d.pelvisY &&
+        cur.spineY === d.spineY &&
+        cur.shoulderY === d.shoulderY &&
+        cur.shoulderX === d.shoulderX
+          ? cur
+          : d,
+      ),
+    [],
+  )
   const dims = (skin && modelDims) || PRIMITIVE_DIMS
   useEffect(() => {
     for (const mat of Object.values(m)) mat.visible = !skin
@@ -244,7 +257,7 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
     const target = tmpRun
     copyPose(READY, target)
     const sw = Math.sin(s.phase) * dir
-    const idle = Math.sin(clock.clock.elapsedTime * 2.4 + side) * 0.03
+    const idle = Math.sin(clock.clock.elapsedTime * 2.4 + side) * 0.012
     target.j.lHip[0] = READY.j.lHip[0] * (1 - run * 0.6) + sw * 0.85 * run
     target.j.rHip[0] = READY.j.rHip[0] * (1 - run * 0.6) - sw * 0.85 * run
     target.j.lKnee[0] = READY.j.lKnee[0] * (1 - run * 0.5) + Math.max(0, -sw) * 1.3 * run + 0.25 * run

@@ -293,14 +293,15 @@ label:focus-within {
 }
 
 .serve-panel {
+  /* Under the scoreboard, clear of the court and both players. */
   position: absolute;
-  left: 50%;
-  top: 20px;
-  transform: translate(-50%, -8px);
-  width: min(440px, calc(100% - 32px));
+  left: 20px;
+  top: 140px;
+  transform: translateY(-8px);
+  width: min(300px, calc(100% - 40px));
   display: grid;
   gap: 8px;
-  padding: 12px 16px 12px;
+  padding: 12px 14px;
   background: var(--panel);
   backdrop-filter: blur(8px);
   border-radius: 8px;
@@ -311,23 +312,15 @@ label:focus-within {
     transform 0.2s;
 }
 
-/* Below the scoreboard when there is no room beside it. */
-@media (max-width: 1240px) {
-  .serve-panel {
-    top: 136px;
-  }
-}
-
 .serve-panel[data-stage='aim'],
 .serve-panel[data-stage='toss'] {
   opacity: 1;
-  transform: translate(-50%, 0);
+  transform: translateY(0);
 }
 
 .serve-steps {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
   font-family: var(--f-display);
   font-size: 14px;
   font-weight: 700;
@@ -382,7 +375,7 @@ label:focus-within {
 }
 
 .serve-call {
-  text-align: center;
+  text-align: left;
   font-family: var(--f-display);
   font-style: italic;
   font-weight: 800;
@@ -407,7 +400,7 @@ label:focus-within {
 
 .serve-keys {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
   gap: 4px 14px;
   font-size: 13px;

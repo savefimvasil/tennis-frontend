@@ -84,8 +84,6 @@ export function resetForServe() {
   sim.prediction = null
   aiLetGo = false
   serveClock = 0
-  sim.serveAim = 0
-  sim.serveTarget = null
   hudLive.tossMeter = null
   // Coastal breeze: drifts a little between points, occasionally gusting.
   const angle = Math.atan2(wind.z, wind.x) + (Math.random() - 0.5) * 0.9
@@ -345,7 +343,6 @@ function hitServe(side: Side, shot: ShotType, grade: Grade, aimX: number) {
   a.tossing = false
   hudLive.tossMeter = null
   hudLive.serveStage = null
-  sim.serveTarget = null
   strike(side, second && shot === 'flat' ? 'topspin' : shot, grade, t, true)
 }
 
@@ -385,15 +382,27 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   const serving = sim.phase === 'serve' && sim.server === HUMAN && sim.lastHitter === null
 
   if (serving) {
-    // GTA-style serve: the server stays put; the arrows sweep the aim marker across the box.
-    a.vx = a.vz = 0
-    sim.serveAim = Math.max(-1, Math.min(1, sim.serveAim + input.moveX * SERVE.aimRate * dt))
-    sim.serveTarget = serveTarget(HUMAN, sim.serveAim, sim.serveNumber === 2)
+    // GTA-style serve: walk along the baseline before the toss. There is no target marker:
+    // the arrow held at the hit angles the serve and the toss timing sets its power.
     if (sim.held) {
       hudLive.serveStage = 'aim'
-      if (input.pressed.length) tossBall(a, input.pressed[input.pressed.length - 1])
+      const xs = serverXSign(HUMAN, sim.deuceCourt)
+      a.vz = 0
+      a.vx += (input.moveX * 2.4 - a.vx) * Math.min(1, dt * 12)
+      a.x += a.vx * dt
+      const lo = xs > 0 ? 0.25 : -3.8
+      const hi = xs > 0 ? 3.8 : -0.25
+      if (a.x < lo || a.x > hi) {
+        a.x = Math.max(lo, Math.min(hi, a.x))
+        a.vx = 0
+      }
+      if (input.pressed.length) {
+        a.vx = 0
+        tossBall(a, input.pressed[input.pressed.length - 1])
+      }
       return
     }
+    a.vx = a.vz = 0
     // Tossing: release the button (or press again) to hit, ideally near the top of the toss.
     hudLive.serveStage = 'toss'
     hudLive.tossMeter = Math.max(0, Math.min(1, (p.y - SERVE.handHeight) / (SERVE.apex - SERVE.handHeight)))
@@ -401,7 +410,7 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     if (input.released.includes(a.swingShot) || input.pressed.length) {
       const grade = serveGrade(p.y, v.y)
       useGame.getState().showTiming(grade)
-      hitServe(HUMAN, a.swingShot, grade, sim.serveAim)
+      hitServe(HUMAN, a.swingShot, grade, input.moveX)
       return
     }
     if (v.y < 0 && p.y < 1.25) retoss(a)

@@ -67,9 +67,6 @@ export const sim = {
   prediction: null as import('../physics/flight').Flight | null,
   predictionStart: 0,
   shake: 0,
-  /** Human serve aim across the service box, -1..1. */
-  serveAim: 0,
-  serveTarget: null as { x: number; z: number } | null,
   events: [] as BallEvent[],
   athletes: [makeAthlete(Math.PI), makeAthlete(0)] as [Athlete, Athlete],
 }

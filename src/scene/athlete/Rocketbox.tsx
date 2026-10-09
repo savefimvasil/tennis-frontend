@@ -117,7 +117,8 @@ const worldPos = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3())
  * Merging those that share a material cuts draw calls (and skinning passes, shadows
  * included) from ~7 to 2-3 per player.
  */
-function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THREE.Material) {
+function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THREE.Material): THREE.BufferGeometry[] {
+  const created: THREE.BufferGeometry[] = []
   const meshes: THREE.SkinnedMesh[] = []
   scene.traverse((o) => {
     if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh)
@@ -139,6 +140,7 @@ function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THR
       }
       continue
     }
+    if (geometry !== first.geometry) created.push(geometry)
     const merged = new THREE.SkinnedMesh(geometry, mat)
     merged.name = first.name
     merged.position.copy(first.position)
@@ -152,6 +154,7 @@ function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THR
     first.parent!.add(merged)
     for (const m of list) m.parent!.remove(m)
   }
+  return created
 }
 
 /** Rotates a bone about a world-space axis, in the current pose. */
@@ -233,7 +236,7 @@ export function RocketboxBody({
     })
     const pick = (mat: THREE.Material) =>
       mat.name.includes('opacity') ? hair : mat.name.includes('head') ? head : body
-    mergeByMaterial(scene, pick)
+    const mergedGeometries = mergeByMaterial(scene, pick)
     // Rest pose, measured in the avatar's own space (authored facing +z, metres).
     scene.updateMatrixWorld(true)
     const p = (n: string) => worldPos(scene.getObjectByName(n)!)
@@ -286,8 +289,18 @@ export function RocketboxBody({
       driven.push({ bone: o as THREE.Bone, src, restHang: corr.clone().multiply(restModel) })
     })
     const hips = scene.getObjectByName('Bip01') as THREE.Bone
-    return { scene, driven, hips, hipsRest: hips.position.clone(), dims, mount }
-  }, [gltf, tex, skin.shirt])
+    const dispose = () => {
+      for (const g of mergedGeometries) g.dispose()
+      for (const m of [body, head, hair]) m.dispose()
+      if (bodyMap !== tex.body) bodyMap.dispose()
+    }
+    return { scene, driven, hips, hipsRest: hips.position.clone(), dims, mount, dispose }
+    // useTexture returns a fresh keyed object on every render, so depend on the textures
+    // themselves: depending on `tex` rebuilt the whole avatar every frame.
+  }, [gltf, tex.body, tex.bodyNormal, tex.head, tex.headNormal, tex.opacity, skin.shirt])
+
+  // Free the GPU resources of a rig that is replaced (skin change) or unmounted.
+  useEffect(() => () => rig.dispose(), [rig])
 
   useEffect(() => {
     onDims?.(rig.dims)

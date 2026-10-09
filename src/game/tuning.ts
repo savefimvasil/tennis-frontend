@@ -81,8 +81,6 @@ export const SERVE = {
   apex: 1.45 + (5.6 * 5.6) / (2 * 9.81),
   perfectY: [2.85, 3.2] as const,
   goodY: [2.5, 3.2] as const,
-  /** How fast the arrow keys sweep the serve aim across the box (full width per second). */
-  aimRate: 1.6,
 }
 
 export type Difficulty = 'easy' | 'pro' | 'ace'

@@ -1,7 +1,7 @@
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Canvas } from '@react-three/fiber'
-import { PerformanceMonitor } from '@react-three/drei'
+import { Preload } from '@react-three/drei'
 import { Physics, useBeforePhysicsStep } from '@react-three/rapier'
 import { PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
@@ -46,9 +46,10 @@ function FrameLimiter({ fps }: { fps: number }) {
     let last = 0
     const interval = 1000 / fps
     const loop = (now: number) => {
-      // Small tolerance so a 60 Hz display does not drop to 30.
-      if (now - last >= interval - 2) {
-        last = now
+      // Step the schedule by whole intervals for even pacing on 60/120/144 Hz displays;
+      // the 1 ms tolerance keeps a 60 Hz display from dropping to 30.
+      if (now - last >= interval - 1) {
+        last = Math.max(last + interval, now - interval)
         invalidate()
       }
       raf = requestAnimationFrame(loop)
@@ -61,13 +62,12 @@ function FrameLimiter({ fps }: { fps: number }) {
 
 export function Scene() {
   const quality = useGame((s) => s.quality)
-  const setQuality = useGame((s) => s.setQuality)
   const screen = useGame((s) => s.screen)
   const skin = useGame((s) => s.skin)
   const preset = PRESETS[quality]
-  const deviceDpr = window.devicePixelRatio || 1
-  const [dpr, setDpr] = useState(() => Math.min(deviceDpr, preset.dprMax))
-  useEffect(() => setDpr(Math.min(deviceDpr, preset.dprMax)), [deviceDpr, preset.dprMax])
+  // A fixed pixel ratio per quality. Changing it on the fly (as an automatic performance
+  // monitor did) reallocates every render target and recompiles shaders: that was the freezing.
+  const dpr = Math.min(window.devicePixelRatio || 1, preset.dprMax)
   const shadowSize = preset.shadow
 
   return (
@@ -79,23 +79,13 @@ export function Scene() {
       gl={{ antialias: false, powerPreference: 'default', stencil: false }}
       camera={{ fov: 50, near: 0.1, far: 1200, position: [0, 8, 30] }}
       onCreated={(state) => {
+        // three.js checks every new shader synchronously, stalling the GPU pipeline; dev only.
+        state.gl.debug.checkShaderErrors = import.meta.env.DEV
         // Dev-only handle for automated inspection.
         if (import.meta.env.DEV) Object.assign(window, { __r3f: state })
       }}
     >
       <FrameLimiter fps={screen === 'playing' ? 60 : 30} />
-      {/* Only judge performance during play: menus are deliberately capped at 30 fps. */}
-      {screen === 'playing' ? (
-        <PerformanceMonitor
-          onDecline={() => {
-            setDpr((d) => Math.max(0.7, d - 0.15))
-            if (quality === 'high') setQuality('medium')
-          }}
-          onIncline={() => setDpr((d) => Math.min(deviceDpr, preset.dprMax, d + 0.15))}
-          flipflops={3}
-          onFallback={() => setQuality('low')}
-        />
-      ) : null}
       <Lighting key={shadowSize} shadowSize={shadowSize} />
       <Suspense fallback={null}>
         <Physics
@@ -116,6 +106,8 @@ export function Scene() {
       <Fx />
       <CameraRig />
       <Effects quality={quality} />
+      {/* Compile every shader up front so nothing compiles mid-rally. */}
+      <Preload all />
     </Canvas>
   )
 }
