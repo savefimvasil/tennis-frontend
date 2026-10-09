@@ -26,6 +26,10 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Optional repository variable: an https:// multiplayer server for the Pages build.
+          # Unset, the Pages version plays offline (the Online button stays hidden).
+          VITE_SERVER_URL: ${{ vars.SERVER_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

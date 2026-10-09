@@ -41,6 +41,45 @@ Serve keys: W flat, E slice, Q kick, R safe.
 - **Court:** hard, clay, grass, tuned to the ITF Court Pace Rating bands.
 - **Pace:** Club (slower, GTA-like rallies) or Tour (pro ball speeds).
 
+## Online
+
+The game looks for a multiplayer server when it starts. The **Play online** button appears
+only when a server answers. Without one, everything else works offline.
+
+The online lobby offers quick match, open or private games (join by code), and a live list
+of open games. The server is
+[tennis-backend](https://github.com/savefimvasil/tennis-backend), and it referees every
+shot:
+- this client sends only key presses, the toss and its swings;
+- the server checks each swing against its own simulation of the ball;
+- it recomputes the shot with the same code (`src/game/shot.ts`, `src/physics/flight.ts`);
+- it makes every call.
+
+Where the game looks for the server, first match wins:
+
+| Where | Example |
+| --- | --- |
+| `?server=` in the page URL | `http://localhost:5173/?server=http://192.168.1.5:3000` |
+| `VITE_SERVER_URL` at build time | `VITE_SERVER_URL=https://play.example.com npm run build`; `none` disables online |
+| Development | port 3000 on the same host |
+| Production | the page's own origin (the Docker stack in tennis-backend/deploy) |
+
+To play two copies of the game against each other headlessly (each in its own process,
+against a running server):
+
+```bash
+LIVE_SERVER=http://localhost:3000 ROLE=host  npx vitest run src/net/online.live.test.ts &
+LIVE_SERVER=http://localhost:3000 ROLE=guest npx vitest run src/net/online.live.test.ts
+```
+
+## Deploy
+
+- **GitHub Pages** (`.github/workflows/deploy.yml`): the offline build. Set the repository
+  variable `SERVER_URL` to an `https://` server to enable online play there.
+- **Your own server** (`.github/workflows/server.yml`, `Dockerfile`, `nginx.conf`): the
+  image is published to `ghcr.io/savefimvasil/tennis-frontend` and deployed by the stack
+  in [tennis-backend/deploy](https://github.com/savefimvasil/tennis-backend/tree/main/deploy).
+
 ## Graphics settings
 
 | Setting | Resolution cap | Shadows | Post-processing |
