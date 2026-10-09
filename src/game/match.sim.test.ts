@@ -151,15 +151,6 @@ describe('full match simulation', () => {
         endings.set(st.toast.title, (endings.get(st.toast.title) ?? 0) + 1)
       }
       maxRally = Math.max(maxRally, sim.hits)
-      if (process.env.TRACE && sim.time < Number(process.env.TRACE)) {
-        const key = `${sim.phase}|${sim.hits}|${sim.bounces}|${sim.lastHitter}|${sim.held}`
-        if (key !== (bot as { k?: string }).k) {
-          ;(bot as { k?: string }).k = key
-          const p = ball.translation()
-          const hs = sim.athletes.map((a) => `${a.x.toFixed(1)},${a.z.toFixed(1)}`).join(' ')
-          console.log(sim.time.toFixed(2), key, `ball ${p.x.toFixed(1)},${p.y.toFixed(1)},${p.z.toFixed(1)}`, hs, st.toast?.title ?? '')
-        }
-      }
       if (sim.phase !== lastPhase) {
         lastPhase = sim.phase
         phaseSince = sim.time
