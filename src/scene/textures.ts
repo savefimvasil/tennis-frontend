@@ -166,7 +166,8 @@ export function windscreenTexture(text: string) {
     }
     draw()
     const t = finish(c)
-    document.fonts?.ready.then(() => {
+    // Load the face explicitly: a canvas never triggers a lazy @font-face load on its own.
+    document.fonts?.load('700 70px "Barlow Condensed"').then(() => {
       draw()
       t.needsUpdate = true
     })

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
+import { AnimatePresence, MotionConfig } from 'motion/react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { GameOver, MainMenu, PauseMenu } from './ui/Menu'
@@ -38,10 +39,14 @@ export default function App() {
   return (
     <div className="app">
       <Scene />
-      {screen === 'playing' || screen === 'paused' ? <Hud /> : null}
-      {screen === 'menu' ? <MainMenu /> : null}
-      {screen === 'paused' ? <PauseMenu /> : null}
-      {screen === 'over' ? <GameOver /> : null}
+      <MotionConfig reducedMotion="user">
+        {screen === 'playing' || screen === 'paused' ? <Hud /> : null}
+        <AnimatePresence>
+          {screen === 'menu' ? <MainMenu key="menu" /> : null}
+          {screen === 'paused' ? <PauseMenu key="pause" /> : null}
+          {screen === 'over' ? <GameOver key="over" /> : null}
+        </AnimatePresence>
+      </MotionConfig>
       {LabPanel ? (
         <Suspense fallback={null}>
           <LabPanel />
