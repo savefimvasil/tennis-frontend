@@ -6,6 +6,7 @@ import {
   CellSignalLow,
   CellSignalMedium,
   GameController,
+  Globe,
   Gauge,
   House,
   Keyboard,
@@ -28,6 +29,7 @@ import { SKINS } from '../scene/athlete/skins'
 import type { FormatId } from '../game/scoring'
 import { initAudio } from '../audio/sound'
 import { flushInput } from '../input/input'
+import { leaveRoom, useNet } from '../net/net'
 import { ArrowKeys, Key, overlayMotion, stagger, staggerItem } from './kit'
 
 interface Option<T> {
@@ -188,6 +190,7 @@ export function MainMenu() {
           </motion.fieldset>
           <motion.div className="menu-actions" {...staggerItem}>
             <PlayButton onPlay={start} />
+            <OnlineButton />
             <div className="menu-secondary">
               <button className="ghost" onClick={() => setHelp(true)}>
                 <Keyboard weight="bold" /> Controls
@@ -232,6 +235,32 @@ export function MainMenu() {
       </motion.div>
       <AnimatePresence>{help ? <ControlsSheet onClose={() => setHelp(false)} /> : null}</AnimatePresence>
     </motion.div>
+  )
+}
+
+/** Shown only while a multiplayer server is reachable. */
+function OnlineButton() {
+  const status = useNet((s) => s.status)
+  const openOnline = useGame((s) => s.openOnline)
+  return (
+    <AnimatePresence>
+      {status === 'up' ? (
+        <motion.button
+          className="online-btn"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          onClick={() => {
+            initAudio()
+            openOnline()
+          }}
+        >
+          <Globe weight="fill" />
+          <span>Play online</span>
+          <i className="live-dot" />
+        </motion.button>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -370,14 +399,20 @@ function ControlsSheet({ onClose }: { onClose: () => void }) {
 }
 
 export function PauseMenu() {
-  const { resume, quit } = useGame()
+  const { resume, quit, mode } = useGame()
+  const online = mode === 'online'
   return (
     <motion.div className="overlay dim" {...overlayMotion}>
       <motion.div className="card pause" {...stagger}>
         <motion.div className="eyebrow" {...staggerItem}>
           <TennisBall weight="fill" /> Match paused
         </motion.div>
-        <motion.h2 {...staggerItem}>Paused</motion.h2>
+        <motion.h2 {...staggerItem}>{online ? 'Menu' : 'Paused'}</motion.h2>
+        {online ? (
+          <motion.p className="note" {...staggerItem}>
+            The online match keeps running while this menu is open.
+          </motion.p>
+        ) : null}
         <motion.div className="card-actions" {...staggerItem}>
           <PlayButton
             label="Resume"
@@ -388,8 +423,14 @@ export function PauseMenu() {
           />
           <div className="menu-secondary">
             <SoundToggle />
-            <button className="ghost" onClick={quit}>
-              <House weight="bold" /> Quit to menu
+            <button
+              className="ghost"
+              onClick={() => {
+                if (online) void leaveRoom()
+                quit()
+              }}
+            >
+              <House weight="bold" /> {online ? 'Leave (forfeit)' : 'Quit to menu'}
             </button>
           </div>
         </motion.div>
@@ -427,7 +468,8 @@ function StatBar({ label, you, opp }: { label: string; you: number; opp: number 
 }
 
 export function GameOver() {
-  const { match, stats, start, quit } = useGame()
+  const { match, stats, start, quit, mode, openOnline } = useGame()
+  const online = mode === 'online'
   const won = match.winner === 0
   return (
     <motion.div className="overlay dim" {...overlayMotion}>
@@ -465,10 +507,11 @@ export function GameOver() {
         </motion.div>
         <motion.div className="card-actions" {...staggerItem}>
           <PlayButton
-            label="Rematch"
+            label={online ? 'Play online again' : 'Rematch'}
             onPlay={() => {
               flushInput()
-              start()
+              if (online) openOnline()
+              else start()
             }}
           />
           <button className="ghost" onClick={quit}>

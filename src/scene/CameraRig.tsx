@@ -20,7 +20,7 @@ export function CameraRig() {
     const dt = Math.min(dtRaw, 0.05)
     const screen = useGame.getState().screen
     const c = current.current
-    if (screen === 'menu' || screen === 'over') {
+    if (screen === 'menu' || screen === 'online' || screen === 'over') {
       const t = state.clock.elapsedTime * 0.05
       pos.set(Math.sin(t) * 24, 7.5 + Math.sin(t * 2) * 1.5, Math.cos(t) * 30)
       look.set(0, 0.5, 0)

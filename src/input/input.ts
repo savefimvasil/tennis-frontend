@@ -38,8 +38,14 @@ let pauseQ = false
 const padHeld: Record<ShotType, boolean> = { topspin: false, slice: false, lob: false, flat: false }
 let padStartHeld = false
 
+/** Typing in a text field (the lobby's name and room code) is not playing. */
+function typing(e: KeyboardEvent) {
+  const t = e.target as HTMLElement | null
+  return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+}
+
 function onKeyDown(e: KeyboardEvent) {
-  if (e.repeat) return
+  if (e.repeat || typing(e)) return
   keys.add(e.code)
   const shot = KEY_SHOTS[e.code]
   if (shot) {

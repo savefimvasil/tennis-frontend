@@ -151,6 +151,42 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
   return { samples, bounces, netCrossY, netCrossX }
 }
 
+export interface BallState {
+  p: V3
+  v: V3
+  w: V3
+}
+
+/**
+ * Ball state `duration` seconds after (p0, v0, w0): the same integration as `simulate`,
+ * bounces included. Used to fast-forward a networked ball to the present.
+ */
+export function advance(p0: V3, v0: V3, w0: V3, duration: number, dt: number = PHYSICS.timeStep): BallState {
+  const p = { ...p0 }
+  const v = { ...v0 }
+  const w = { ...w0 }
+  const invM = 1 / BALL.mass
+  const steps = Math.max(0, Math.round(duration / dt))
+  for (let i = 0; i < steps; i++) {
+    aeroForce(v, w, tmpF)
+    const damp = 1 / (1 + dt * SPIN_DAMPING)
+    w.x *= damp
+    w.y *= damp
+    w.z *= damp
+    v.x += tmpF.x * invM * dt
+    v.y += (tmpF.y * invM + PHYSICS.gravity) * dt
+    v.z += tmpF.z * invM * dt
+    p.x += v.x * dt
+    p.y += v.y * dt
+    p.z += v.z * dt
+    if (p.y <= BALL.radius && v.y < 0) {
+      p.y = BALL.radius
+      applyBounce(v, w)
+    }
+  }
+  return { p, v, w }
+}
+
 /**
  * Tennis ball bounce on a hard court (after Cross 2005, "Bounce of a spinning ball near normal incidence",
  * and Brody's sliding/gripping model). Mutates v and w.

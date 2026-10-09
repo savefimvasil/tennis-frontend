@@ -3,6 +3,8 @@ import { AnimatePresence, MotionConfig } from 'motion/react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { GameOver, MainMenu, PauseMenu } from './ui/Menu'
+import { OnlineLobby } from './ui/Online'
+import { startNet } from './net/net'
 import { useGame } from './game/store'
 import { installInput, flushInput } from './input/input'
 import { setMuted } from './audio/sound'
@@ -16,6 +18,8 @@ export default function App() {
 
   useEffect(() => {
     installInput()
+    // Look for a multiplayer server in the background; the game does not need one.
+    startNet()
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'Escape' && e.code !== 'KeyP') return
       const st = useGame.getState()
@@ -25,7 +29,8 @@ export default function App() {
         st.resume()
       }
     }
-    const onBlur = () => useGame.getState().pause()
+    // Single player pauses when the window loses focus; an online match cannot.
+    const onBlur = () => useGame.getState().mode === 'solo' && useGame.getState().pause()
     window.addEventListener('keydown', onKey)
     window.addEventListener('blur', onBlur)
     return () => {
@@ -43,6 +48,7 @@ export default function App() {
         {screen === 'playing' || screen === 'paused' ? <Hud /> : null}
         <AnimatePresence>
           {screen === 'menu' ? <MainMenu key="menu" /> : null}
+          {screen === 'online' ? <OnlineLobby key="online" /> : null}
           {screen === 'paused' ? <PauseMenu key="pause" /> : null}
           {screen === 'over' ? <GameOver key="over" /> : null}
         </AnimatePresence>

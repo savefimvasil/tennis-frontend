@@ -34,7 +34,9 @@ function GameLoop() {
   useEffect(() => {
     resetForServe()
     return useGame.subscribe((s, prev) => {
-      if (s.screen === 'playing' && (prev.screen === 'menu' || prev.screen === 'over')) resetForServe()
+      // Online matches are set up by the server's point:start instead.
+      if (s.mode === 'solo' && s.screen === 'playing' && (prev.screen === 'menu' || prev.screen === 'over'))
+        resetForServe()
     })
   }, [])
   return null
@@ -83,7 +85,10 @@ export function Scene() {
   const shadowSize = preset.shadow
   const timeScale = useLab((s) => (LAB_ENABLED ? s.timeScale : 1))
   const colliders = useLab((s) => LAB_ENABLED && s.colliders)
-  const slow = screen === 'playing' && timeScale < 1
+  const mode = useGame((s) => s.mode)
+  // An online match keeps running behind the pause menu: the opponent does not stop.
+  const running = screen === 'playing' || (mode === 'online' && screen === 'paused')
+  const slow = running && timeScale < 1
 
   return (
     <Canvas
@@ -100,13 +105,13 @@ export function Scene() {
         if (import.meta.env.DEV) Object.assign(window, { __r3f: state })
       }}
     >
-      <FrameLimiter fps={screen === 'playing' ? 60 : 30} />
+      <FrameLimiter fps={running ? 60 : 30} />
       <Lighting key={shadowSize} shadowSize={shadowSize} />
       <Suspense fallback={null}>
         <Physics
           gravity={[0, PHYSICS.gravity, 0]}
           timeStep={PHYSICS.timeStep}
-          paused={screen !== 'playing' || slow}
+          paused={!running || slow}
           interpolate={false}
           debug={colliders}
         >

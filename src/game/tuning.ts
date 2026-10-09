@@ -131,6 +131,9 @@ export const PLAYER_HELP: Record<Difficulty, PlayerHelp> = {
   ace: { assist: 0.6, track: 0, timing: 1, reach: 1.55, error: 1 },
 }
 
+/** Online matches: both players get the same, mid-level help (the server enforces it). */
+export const ONLINE_HELP: PlayerHelp = { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 }
+
 export const AI_LEVELS: Record<Difficulty, AiSpec> = {
   easy: {
     speed: 3.8,

@@ -2,21 +2,7 @@ import { AI, BALL, COURT, HUMAN, PHYSICS, halfSign, other, type Side } from './c
 import { isDeuceCourt } from './scoring'
 import { hudLive, useGame } from './store'
 import { pushEvent, sim, type Athlete } from './sim'
-import {
-  AI_LEVELS,
-  GRADE_EFFECT,
-  PACE,
-  PLAYER,
-  PLAYER_HELP,
-  RACKET_EA,
-  RALLY_BALL_SPEED,
-  SERVE,
-  SERVES,
-  SHOTS,
-  TIMING,
-  type Grade,
-  type ShotType,
-} from './tuning'
+import { AI_LEVELS, PACE, PLAYER, ONLINE_HELP, PLAYER_HELP, SERVE, TIMING, type Grade, type ShotType } from './tuning'
 import {
   aeroForce,
   applyBounce,
@@ -25,10 +11,23 @@ import {
   inServiceBox,
   inSinglesCourt,
   simulate,
-  solveShot,
   type V3,
+  advance,
+  type BallState,
 } from '../physics/flight'
 import { pollInput, type InputState } from '../input/input'
+import type { AthleteState, PointStart, PressMsg, StrikeIntent, StrikeResolved, TossMsg } from '../net/protocol'
+import {
+  gradeFor,
+  rallyTarget,
+  resolveShot,
+  serveGrade,
+  serverXSign,
+  serveTarget,
+  shotRng,
+  type Miss,
+  type Rng,
+} from './shot'
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
 // The match director runs once per physics step (120 Hz): input, movement,
@@ -39,26 +38,18 @@ let serveClock = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 
+/** Random source for a side's next shot: Math.random offline, the rally seed online. */
+let shotRandom: (side: Side) => Rng = () => Math.random
+export function setShotRandom(fn: (side: Side) => Rng) {
+  shotRandom = fn
+}
+
 function forward(a: Athlete) {
   return { x: Math.sin(a.yaw), z: Math.cos(a.yaw) }
 }
 function right(a: Athlete) {
   const f = forward(a)
   return { x: -f.z, z: f.x }
-}
-
-/** Standard normal sample (Box-Muller), clipped to +-2.5 sigma. */
-function gauss() {
-  const u = 1 - Math.random()
-  const v = Math.random()
-  const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
-  return Math.max(-2.5, Math.min(2.5, n))
-}
-
-/** Sideways sign (+1 right of centre mark) the server stands on, in world x. */
-function serverXSign(server: Side, deuce: boolean): 1 | -1 {
-  const s = server === HUMAN ? 1 : -1
-  return (deuce ? s : -s) as 1 | -1
 }
 
 export function tossPoint(a: Athlete) {
@@ -70,9 +61,10 @@ export function tossPoint(a: Athlete) {
 export function resetForServe() {
   const st = useGame.getState()
   const m = st.match
-  sim.server = m.server
-  sim.serveNumber = st.serveNumber
-  sim.deuceCourt = isDeuceCourt(m)
+  const op = online?.point
+  sim.server = op ? op.server : m.server
+  sim.serveNumber = op ? op.serveNumber : st.serveNumber
+  sim.deuceCourt = op ? op.deuceCourt : isDeuceCourt(m)
   sim.phase = 'serve'
   sim.held = true
   sim.lastHitter = null
@@ -86,11 +78,19 @@ export function resetForServe() {
   aiLetGo = false
   serveClock = 0
   hudLive.tossMeter = null
-  // Coastal breeze: drifts a little between points, occasionally gusting.
-  const angle = Math.atan2(wind.z, wind.x) + (Math.random() - 0.5) * 0.9
-  const base = Math.hypot(wind.x, wind.z) * 0.6 + Math.random() * 1.4 + (Math.random() < 0.15 ? 1.5 : 0)
-  const speed = Math.min(3.5, base)
-  setWind(Math.cos(angle) * speed, Math.sin(angle) * speed)
+  if (op) setWind(op.wind.x, op.wind.z)
+  else {
+    // Coastal breeze: drifts a little between points, occasionally gusting.
+    const angle = Math.atan2(wind.z, wind.x) + (Math.random() - 0.5) * 0.9
+    const base = Math.hypot(wind.x, wind.z) * 0.6 + Math.random() * 1.4 + (Math.random() < 0.15 ? 1.5 : 0)
+    const speed = Math.min(3.5, base)
+    setWind(Math.cos(angle) * speed, Math.sin(angle) * speed)
+  }
+  if (online) {
+    online.auth = null
+    online.toss = null
+    online.remote.lockUntil = 0
+  }
   hudLive.wind = { x: wind.x, z: wind.z }
 
   const server = sim.server
@@ -127,6 +127,10 @@ export function resetForServe() {
 
 function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error' | 'double') {
   if (sim.phase === 'dead' || sim.phase === 'idle') return
+  if (online) {
+    awaitCall()
+    return
+  }
   sim.phase = 'dead'
   sim.deadTimer = 2.4
   sim.landing = null
@@ -138,6 +142,10 @@ function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error'
 
 function fault(title: string) {
   if (sim.phase !== 'serve') return
+  if (online) {
+    awaitCall()
+    return
+  }
   const st = useGame.getState()
   if (st.serveNumber === 2) {
     endPoint(other(sim.server), 'Double fault', 'double')
@@ -161,8 +169,6 @@ function predictFromBall() {
   sim.predictionStart = sim.time
 }
 
-type Miss = 'net' | 'long' | 'wide' | null
-
 function strike(
   side: Side,
   shot: ShotType,
@@ -171,52 +177,53 @@ function strike(
   serve: boolean,
   miss: Miss = null,
   lateral = 0,
+  aim = { x: 0, y: 0 },
+  pressT?: number,
 ) {
   const ball = sim.ball
   if (!ball) return
   const a = sim.athletes[side]
   const from = ball.translation()
-  const eff = GRADE_EFFECT[grade]
-  const running = Math.hypot(a.vx, a.vz) > 3.2 ? 0.35 : 0
-  // Harder contacts are less accurate: incoming pace, awkward height, reaching wide.
-  const vin = ball.linvel()
-  const pace = Math.hypot(vin.x, vin.y, vin.z)
-  const height = from.y < 0.45 ? (0.45 - from.y) * 2.5 : from.y > 1.8 ? (from.y - 1.8) * 1.2 : 0
-  const reach = Math.max(0, Math.abs(lateral) - 0.9) * 1.2
-  const difficulty = serve ? 1 : 1 + Math.max(0, pace - 24) / 22 + height + reach
-  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty * (side === HUMAN ? help().error : 1)
-  // Depth scatters more than direction for real groundstrokes.
-  let tx = target.x + gauss() * errScale * 0.75
-  let tz = target.z + gauss() * errScale
-  // Early contact pulls the ball across the body, late contact pushes it the other way.
-  if (!serve && (grade === 'early' || grade === 'late')) {
-    const r = right(a)
-    const hand = a.swing === 'backhand' ? -1 : 1
-    const bias = (grade === 'early' ? -1 : 1) * hand * (0.8 + Math.random() * 0.7)
-    tx += r.x * bias
-  }
-  if (miss === 'long') tz += Math.sign(tz) * (COURT.halfLength - Math.abs(tz) + 0.4 + Math.random() * 1.2)
-  if (miss === 'wide') tx = Math.sign(tx || 1) * (COURT.singlesHalfWidth + 0.3 + Math.random() * 1)
-  const spec = serve ? SERVES[shot] : SHOTS[shot]
-  let netClearance = spec.netClearance
-  // Mistimed shots sometimes find the tape.
-  if ((grade === 'early' || grade === 'late') && Math.random() < 0.3) netClearance -= 0.25 + Math.random() * 0.3
-  if (miss === 'net') netClearance = -0.35 - Math.random() * 0.3
-  const lowBall = from.y < 0.45 && !serve ? 0.85 : 1
   const st = useGame.getState()
-  const swing = PACE[st.pace] * (side === AI ? AI_LEVELS[st.difficulty].pace : 1)
-  // Racket impact: part of the incoming ball's speed comes back (v_out = eA v_in + (1 + eA) V_racket).
-  const rebound = serve || shot === 'lob' ? 0 : Math.max(-3, Math.min(8, RACKET_EA * (pace - RALLY_BALL_SPEED)))
-  const sol = solveShot({
-    from,
-    target: { x: tx, z: tz },
-    speed: spec.speed * eff.pace * lowBall * swing + rebound,
-    // Spin scales with racket-head speed like the pace does.
-    spin: spec.spin * (grade === 'perfect' ? 1.1 : 1) * (serve ? 1 : swing),
-    sidespin: serve ? SERVES[shot].sidespin : 0,
-    netClearance,
-    lobPitch: serve ? undefined : SHOTS[shot].lobPitch,
-  })
+  const r = right(a)
+  const vin = ball.linvel()
+  const sol = resolveShot(
+    {
+      from: { x: from.x, y: from.y, z: from.z },
+      vin: { x: vin.x, y: vin.y, z: vin.z },
+      serve,
+      shot,
+      grade,
+      target,
+      running: Math.hypot(a.vx, a.vz) > 3.2,
+      lateral,
+      rightX: r.x,
+      hand: a.swing === 'backhand' ? -1 : 1,
+      swingMul: PACE[st.pace] * (side === AI ? AI_LEVELS[st.difficulty].pace : 1),
+      miss,
+    },
+    shotRandom(side),
+  )
+  if (online && side === HUMAN) {
+    // Tell the server what was swung at; it re-runs this same computation to check it.
+    const intent: StrikeIntent = {
+      rallyId: online.rallyId,
+      hit: sim.hits + 1,
+      kind: serve ? 'serve' : 'shot',
+      shot,
+      t: online.contactT,
+      p: wire({ x: from.x, y: from.y, z: from.z }),
+      vin: wire({ x: vin.x, y: vin.y, z: vin.z }),
+      aim,
+      pressT,
+      lateral,
+      rightX: r.x,
+      hand: a.swing === 'backhand' ? -1 : 1,
+      running: Math.hypot(a.vx, a.vz) > 3.2,
+    }
+    online.mine.set(intent.hit, { v: sol.v, w: sol.w })
+    online.send.strike(intent)
+  }
   ball.setLinvel(sol.v, true)
   ball.setAngvel(sol.w, true)
   sim.lastHitter = side
@@ -227,7 +234,7 @@ function strike(
   if (side !== sim.server) sim.receiverTouched = true
   sim.landing = { x: sol.landing.x, z: sol.landing.z, t: sim.time }
   predictFromBall()
-  const speed = Math.hypot(sol.v.x, sol.v.y, sol.v.z)
+  const speed = sol.speed
   hudLive.lastShotKmh = speed * 3.6
   pushEvent({ kind: 'hit', x: from.x, y: from.y, z: from.z, power: Math.min(1, speed / 50) })
   if (side === HUMAN) sim.shake = Math.min(1, 0.25 + speed / 80)
@@ -285,7 +292,7 @@ function timeToPlane(a: Athlete, p: V3, v: V3) {
 }
 
 function help() {
-  return PLAYER_HELP[useGame.getState().difficulty]
+  return online ? ONLINE_HELP : PLAYER_HELP[useGame.getState().difficulty]
 }
 
 function inContactWindow(a: Athlete, p: V3, reach = PLAYER.reach) {
@@ -362,16 +369,6 @@ function snapBallToRacket(a: Athlete) {
   if (Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z) < 0.7) ball.setTranslation(s, true)
 }
 
-/** Grades a press `tt` seconds before contact; `widen` > 1 stretches the windows around the ideal. */
-function gradeFor(tt: number, widen = 1): Grade {
-  const mid = (TIMING.perfect[0] + TIMING.perfect[1]) / 2
-  // Early presses are stretched forward in time, late ones squeezed toward contact.
-  const d = tt >= mid ? mid + (tt - mid) / widen : mid - (mid - tt) / widen
-  if (d >= TIMING.perfect[0] && d <= TIMING.perfect[1]) return 'perfect'
-  if (d >= TIMING.good[0] && d <= TIMING.good[1]) return 'good'
-  return d > TIMING.good[1] ? 'early' : 'late'
-}
-
 function updateSwing(a: Athlete, dt: number) {
   if (a.swing !== 'none') {
     a.swingT += dt
@@ -387,17 +384,6 @@ function updateSwing(a: Athlete, dt: number) {
 }
 
 // ---------------------------------------------------------------- serve
-
-function serveTarget(server: Side, aimX: number, safe: boolean) {
-  const receiver = other(server)
-  const boxSign = -serverXSign(server, sim.deuceCourt)
-  const centre = boxSign * 2.05
-  const span = safe ? 1.1 : 1.7
-  const x = Math.max(-3.75, Math.min(3.75, centre + aimX * span))
-  const xClamped = boxSign > 0 ? Math.max(0.3, x) : Math.min(-0.3, x)
-  const depth = COURT.serviceLine - (safe ? 1.25 : 0.75)
-  return { x: xClamped, z: halfSign(receiver) * depth }
-}
 
 /** Release: the racket swings up from the trophy position and meets the ball SERVE.swingTime later. */
 function releaseServe(side: Side, shot: ShotType, grade: Grade, aimX: number) {
@@ -425,7 +411,30 @@ function updatePendingServe(side: Side) {
   a.tossing = false
   const second = sim.serveNumber === 2
   snapBallToRacket(a)
-  strike(side, second && ps.shot === 'flat' ? 'topspin' : ps.shot, ps.grade, serveTarget(side, ps.aimX, second), true)
+  let grade = ps.grade
+  if (online && side === HUMAN) {
+    online.contactT = online.now()
+    // Grade the toss the way the server does: its deterministic flight at the release.
+    if (online.toss) {
+      const b = advance(
+        online.toss.p,
+        { x: 0, y: SERVE.tossSpeed, z: 0 },
+        { x: 0, y: 0, z: 0 },
+        (online.contactT - SERVE.swingTime * 1000 - online.toss.t) / 1000,
+      )
+      grade = serveGrade(b.p.y, b.v.y)
+    }
+  }
+  strike(
+    side,
+    second && ps.shot === 'flat' ? 'topspin' : ps.shot,
+    grade,
+    serveTarget(side, sim.deuceCourt, ps.aimX, second),
+    true,
+    null,
+    0.3,
+    { x: Math.max(-1, Math.min(1, ps.aimX)), y: 0 },
+  )
 }
 
 function tossBall(a: Athlete, shot: ShotType) {
@@ -440,12 +449,11 @@ function tossBall(a: Athlete, shot: ShotType) {
   ball.setTranslation(p, true)
   ball.setLinvel({ x: 0, y: SERVE.tossSpeed, z: 0 }, true)
   ball.setAngvel({ x: 0, y: 0, z: 0 }, true)
-}
-
-function serveGrade(y: number, vy: number): Grade {
-  if (y >= SERVE.perfectY[0] && y <= SERVE.perfectY[1]) return 'perfect'
-  if (y >= SERVE.goodY[0] && y <= SERVE.goodY[1]) return 'good'
-  return vy > 0 ? 'early' : 'late'
+  if (online && a === sim.athletes[HUMAN]) {
+    const t = online.now()
+    online.toss = { t, p: { ...p } }
+    online.send.toss({ rallyId: online.rallyId, t, shot, p: wire(p) })
+  }
 }
 
 function retoss(a: Athlete) {
@@ -521,6 +529,11 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     if (incoming) {
       const grade = tt === Infinity ? null : gradeFor(tt, help().timing)
       a.queued = { shot, grade, pressedAt: sim.time }
+      if (online) {
+        const t = online.now()
+        online.pressT = t
+        online.send.press({ rallyId: online.rallyId, hit: sim.hits + 1, shot, t })
+      }
     }
   }
 
@@ -549,14 +562,29 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     startSwing(a, contact.lateral, a.queued.shot, contact.y, contact)
   const due = a.swing !== 'none' ? sim.time >= a.contactAt - PHYSICS.timeStep / 2 : false
   if (win.ok && (due || !contact)) {
-    const grade = a.queued.grade ?? 'late'
+    let grade = a.queued.grade ?? 'late'
+    let pressT: number | undefined
+    if (online) {
+      // Online, the grade comes from the press and contact times the server also sees.
+      online.contactT = online.now()
+      pressT = online.pressT ?? online.contactT
+      grade = gradeFor((online.contactT - pressT) / 1000, ONLINE_HELP.timing)
+    }
     startSwing(a, win.lateral, a.queued.shot, p.y)
     useGame.getState().showTiming(grade)
     snapBallToRacket(a)
-    const spec = SHOTS[a.queued.shot]
-    const tx = Math.max(-3.7, Math.min(3.7, input.moveX * 3.1))
-    const depth = Math.max(4.8, Math.min(11.1, spec.depth + input.moveY * 1.7))
-    strike(HUMAN, a.queued.shot, grade, { x: tx, z: -depth }, false, null, win.lateral)
+    const aim = { x: Math.max(-1, Math.min(1, input.moveX)), y: Math.max(-1, Math.min(1, input.moveY)) }
+    strike(
+      HUMAN,
+      a.queued.shot,
+      grade,
+      rallyTarget(a.queued.shot, aim.x, aim.y),
+      false,
+      null,
+      online ? Math.max(-ONLINE_HELP.reach, Math.min(ONLINE_HELP.reach, win.lateral)) : win.lateral,
+      aim,
+      pressT,
+    )
   } else if (win.passed) {
     startSwing(a, win.lateral, a.queued.shot)
     a.queued = null
@@ -762,7 +790,8 @@ export function stepGame(dt: number) {
 
   const hitsBefore = sim.hits
   updateHuman(dt, input, p, v)
-  updateAI(dt, p, v)
+  if (online) updateRemote(dt)
+  else updateAI(dt, p, v)
 
   const vNow = ball.linvel()
   const pNow = ball.translation()
@@ -794,5 +823,313 @@ export function stepGame(dt: number) {
       if (pendingAfterDead === 'serve') resetForServe()
       else sim.phase = 'idle'
     }
+  }
+}
+
+// ---------------------------------------------------------------- online
+
+// Online, the opponent is another player and the server is the referee. This client still
+// runs its own physics so play feels instant, but it only reports inputs (key presses,
+// the toss, swings with their contact point); the server answers with the resolved shots
+// and every call. Everything on the wire is in the canonical court frame (seat 0 defends +z);
+// this client always plays at +z, so seat 1 turns vectors by 180 degrees on the way.
+
+interface RemoteSample {
+  t: number
+  x: number
+  z: number
+  vx: number
+  vz: number
+  yaw: number
+}
+
+export interface OnlineLink {
+  seat: Side
+  /** Estimated server clock, ms. */
+  now: () => number
+  send: {
+    state(msg: AthleteState): void
+    toss(msg: TossMsg): void
+    press(msg: PressMsg): void
+    strike(msg: StrikeIntent): void
+  }
+}
+
+interface Online extends OnlineLink {
+  rallyId: number
+  seed: number
+  point: { server: Side; serveNumber: 1 | 2; deuceCourt: boolean; wind: { x: number; z: number } } | null
+  /** The ball as the server last defined it (local frame): the toss or the last strike. */
+  auth: { t0: number; ball: BallState; hit: number; from: Side } | null
+  /** My last toss (local frame). */
+  toss: { t: number; p: V3 } | null
+  pressT: number | null
+  contactT: number
+  /** My strikes as I applied them, to compare with the server's. */
+  mine: Map<number, { v: V3; w: V3 }>
+  remote: { buf: RemoteSample[]; swing: AthleteState | null; lockUntil: number }
+  seq: number
+  sendClock: number
+  /** Simulation time <-> server clock: online events are stamped with the sim's own time. */
+  anchor: { sim: number; server: number }
+  /** Wall-clock estimate of the server clock (from the network layer). */
+  wall: () => number
+}
+
+let online: Online | null = null
+
+/** Switches the director to an online match (or back to single player with null). */
+export function setOnline(link: OnlineLink | null) {
+  if (!link) {
+    online = null
+    setShotRandom(() => Math.random)
+    return
+  }
+  online = {
+    ...link,
+    wall: link.now,
+    // Stamped from the simulation, so a contact carries the time the ball was really there
+    // even when several physics steps run in one rendered frame.
+    now: () => online!.anchor.server + (sim.time - online!.anchor.sim) * 1000,
+    anchor: { sim: sim.time, server: link.now() },
+    rallyId: 0,
+    seed: 0,
+    point: null,
+    auth: null,
+    toss: null,
+    pressT: null,
+    contactT: 0,
+    mine: new Map(),
+    remote: { buf: [], swing: null, lockUntil: 0 },
+    seq: 0,
+    sendClock: 0,
+  }
+  // Shot scatter comes from the rally seed, so the server can reproduce it exactly.
+  setShotRandom(() => shotRng(online!.seed, sim.hits + 1))
+  sim.phase = 'idle'
+  pendingAfterDead = 'none'
+}
+
+export function isOnline() {
+  return online !== null
+}
+
+/** Canonical <-> local frame for this client (a half turn for seat 1). */
+function wire<T extends { x: number; z: number }>(v: T): T {
+  return !online || online.seat === 0 ? { ...v } : { ...v, x: -v.x, z: -v.z }
+}
+function wireYaw(yaw: number) {
+  return !online || online.seat === 0 ? yaw : yaw + Math.PI
+}
+
+/** The local call is only a guess online: freeze the rally until the server's call arrives. */
+function awaitCall() {
+  sim.phase = 'dead'
+  sim.deadTimer = Infinity
+  sim.landing = null
+  hudLive.tossMeter = null
+  pendingAfterDead = 'none'
+}
+
+function setBall(b: BallState) {
+  const ball = sim.ball
+  if (!ball) return
+  ball.setTranslation(b.p, true)
+  ball.setLinvel(b.v, true)
+  ball.setAngvel(b.w, true)
+  sim.prevV = { ...b.v }
+  sim.prevW = { ...b.w }
+  sim.prevVy = b.v.y
+}
+
+/** The server's ball state, fast-forwarded to now. */
+function authNow(): BallState | null {
+  if (!online?.auth) return null
+  return advance(online.auth.ball.p, online.auth.ball.v, online.auth.ball.w, (online.now() - online.auth.t0) / 1000)
+}
+
+/** A new point from the server: play out the gap, then set up the serve. */
+export function onlinePointStart(ps: PointStart) {
+  if (!online) return
+  online.rallyId = ps.rallyId
+  online.seed = ps.seed
+  online.point = {
+    server: (ps.server === online.seat ? HUMAN : AI) as Side,
+    serveNumber: ps.serveNumber,
+    deuceCourt: ps.deuceCourt,
+    wind: wire({ x: ps.wind.x, z: ps.wind.z }),
+  }
+  online.mine.clear()
+  online.pressT = null
+  online.anchor = { sim: sim.time, server: online.wall() }
+  sim.phase = 'dead'
+  sim.deadTimer = Math.max(0, (ps.startsAt - online.now()) / 1000)
+  pendingAfterDead = 'serve'
+}
+
+/** The server's verdict on the point (score and toasts are handled by the net layer). */
+export function onlineRallyOver() {
+  if (!online) return
+  if (sim.phase !== 'dead') awaitCall()
+}
+
+export function onlineToss(msg: TossMsg) {
+  if (!online || msg.rallyId !== online.rallyId) return
+  const p = wire(msg.p)
+  online.auth = {
+    t0: msg.t,
+    ball: { p, v: { x: 0, y: SERVE.tossSpeed, z: 0 }, w: { x: 0, y: 0, z: 0 } },
+    hit: 0,
+    from: AI,
+  }
+  sim.held = false
+  const a = sim.athletes[AI]
+  a.tossing = true
+  a.swing = 'serve'
+  a.swingT = 0
+  a.swingShot = msg.shot
+  online.remote.lockUntil = sim.time + 1.8
+  const b = authNow()
+  if (b) setBall(b)
+}
+
+/** A strike resolved by the server: the opponent's, or the echo of mine. */
+export function onlineStrike(s: StrikeResolved) {
+  if (!online || s.rallyId !== online.rallyId) return
+  const ball: BallState = { p: wire(s.ball.p), v: wire(s.ball.v), w: wire(s.ball.w) }
+  const mineSide = s.from === online.seat
+  online.auth = { t0: s.t, ball, hit: s.hit, from: mineSide ? HUMAN : AI }
+  if (mineSide) {
+    // Usually identical to what this client already applied; correct it if not.
+    const applied = online.mine.get(s.hit)
+    const off = applied
+      ? Math.hypot(applied.v.x - ball.v.x, applied.v.y - ball.v.y, applied.v.z - ball.v.z) +
+        Math.hypot(applied.w.x - ball.w.x, applied.w.y - ball.w.y, applied.w.z - ball.w.z) * 0.01
+      : Infinity
+    if (off > 0.05) {
+      const b = authNow()
+      if (b) setBall(b)
+      sim.landing = { x: wire(s.landing).x, z: wire(s.landing).z, t: sim.time }
+      predictFromBall()
+    }
+    return
+  }
+  // The opponent hit it.
+  const b = authNow()
+  if (!b) return
+  setBall(b)
+  sim.held = false
+  sim.lastHitter = AI
+  sim.hits = s.hit
+  sim.bounces = 0
+  sim.firstBounce = null
+  sim.netTouched = false
+  if (AI !== sim.server) sim.receiverTouched = true
+  const landing = wire(s.landing)
+  sim.landing = { x: landing.x, z: landing.z, t: sim.time }
+  predictFromBall()
+  hudLive.lastShotKmh = s.speed * 3.6
+  pushEvent({ kind: 'hit', x: ball.p.x, y: ball.p.y, z: ball.p.z, power: Math.min(1, s.speed / 50) })
+  const a = sim.athletes[AI]
+  const elapsed = Math.max(0, (online.now() - s.t) / 1000)
+  if (s.kind === 'serve') {
+    a.swing = 'serve'
+    a.swingT = 1 + elapsed
+    a.tossing = false
+  } else {
+    // Forehand if the ball was on the opponent's right (they face +z, so their right is -x).
+    a.swing = ball.p.x < a.x ? 'forehand' : 'backhand'
+    a.swingT = TIMING.swingLead + elapsed
+    a.swingShot = s.shot
+  }
+  online.remote.lockUntil = sim.time + 0.6
+  sim.athletes[HUMAN].split = 0.32
+  useGame.getState().setRally(s.kind === 'serve' ? 1 : s.hit)
+}
+
+/** The server refused my swing: the ball carries on as the server has it. */
+export function onlineStrikeRefused(hit: number) {
+  if (!online) return
+  online.mine.delete(hit)
+  const b = authNow()
+  if (!b || !online.auth) return
+  setBall(b)
+  sim.lastHitter = online.auth.from
+  sim.hits = online.auth.hit
+  sim.held = false
+  predictFromBall()
+}
+
+/** The server pulled me back: I moved faster than the game allows. */
+export function onlineCorrect(pos: { x: number; z: number }) {
+  if (!online) return
+  const p = wire(pos)
+  const a = sim.athletes[HUMAN]
+  a.x = p.x
+  a.z = p.z
+}
+
+export function onlineRemoteState(st: AthleteState) {
+  if (!online) return
+  const r = online.remote
+  const p = wire({ x: st.x, z: st.z })
+  const v = wire({ x: st.vx, z: st.vz })
+  r.buf.push({ t: st.t, x: p.x, z: p.z, vx: v.x, vz: v.z, yaw: wireYaw(st.yaw) })
+  if (r.buf.length > 40) r.buf.shift()
+  r.swing = st
+}
+
+/** Moves the opponent along their reported path, ~100 ms behind, and sends my own state. */
+function updateRemote(dt: number) {
+  if (!online) return
+  // A long stall (hidden tab, a frame over the physics catch-up limit) puts the sim behind
+  // the server; re-anchor rather than stamp events in the past.
+  if (Math.abs(online.now() - online.wall()) > 250) online.anchor = { sim: sim.time, server: online.wall() }
+  const a = sim.athletes[AI]
+  updateSwing(a, dt)
+  const r = online.remote
+  const t = online.now() - 100
+  const buf = r.buf
+  if (buf.length) {
+    let i = buf.length - 1
+    while (i > 0 && buf[i - 1].t > t) i--
+    const b = buf[i]
+    const prev = i > 0 ? buf[i - 1] : b
+    const k = b.t > prev.t ? Math.max(0, Math.min(1, (t - prev.t) / (b.t - prev.t))) : 1
+    a.x = prev.x + (b.x - prev.x) * k
+    a.z = prev.z + (b.z - prev.z) * k
+    a.vx = b.vx
+    a.vz = b.vz
+    a.yaw = b.yaw
+  }
+  // Swing animation from the opponent's own updates, unless a strike or toss just set it.
+  if (r.swing && sim.time > r.lockUntil) {
+    a.swing = r.swing.swing
+    a.swingT = r.swing.swingT
+    a.swingShot = r.swing.swingShot
+    a.tossing = r.swing.tossing
+  }
+
+  // My state, about 20 times a second.
+  online.sendClock += dt
+  if (online.sendClock >= 0.05) {
+    online.sendClock = 0
+    const me = sim.athletes[HUMAN]
+    const p = wire({ x: me.x, z: me.z })
+    const v = wire({ x: me.vx, z: me.vz })
+    online.send.state({
+      rallyId: online.rallyId,
+      seq: ++online.seq,
+      t: online.now(),
+      x: p.x,
+      z: p.z,
+      vx: v.x,
+      vz: v.z,
+      yaw: wireYaw(me.yaw),
+      swing: me.swing,
+      swingT: me.swingT,
+      swingShot: me.swingShot,
+      tossing: me.tossing,
+    })
   }
 }

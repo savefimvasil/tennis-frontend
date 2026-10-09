@@ -7,12 +7,13 @@ import { SERVE } from '../game/tuning'
 import type { Side } from '../game/constants'
 import { ArrowKeys, Key, Rolling } from './kit'
 
-const NAMES: Record<Side, string> = { 0: 'You', 1: 'R. Okafor' }
 const GRADE_LABEL = { perfect: 'Perfect', good: 'Good', early: 'Early', late: 'Late' } as const
 
 function Scoreboard() {
   const match = useGame((s) => s.match)
   const serveNumber = useGame((s) => s.serveNumber)
+  const opponent = useGame((s) => s.opponentName)
+  const names: Record<Side, string> = { 0: 'You', 1: opponent }
   const pressure = pressureLabel(match)
   const call = scoreCall(match)
   return (
@@ -33,7 +34,7 @@ function Scoreboard() {
               ) : null}
             </AnimatePresence>
           </span>
-          <span className="sb-name">{NAMES[side]}</span>
+          <span className="sb-name">{names[side]}</span>
           {match.sets.map((set, i) => (
             <span className={`sb-set ${set[side] > set[side === 0 ? 1 : 0] ? 'won' : ''}`} key={i}>
               {set[side]}
