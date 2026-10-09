@@ -58,7 +58,7 @@ export const useGame = create<GameStore>((set, get) => ({
   screen: 'menu',
   difficulty: 'pro',
   format: 'quick',
-  quality: 'high',
+  quality: 'medium',
   pace: 'club',
   surface: 'hard',
   skin: 'navy',

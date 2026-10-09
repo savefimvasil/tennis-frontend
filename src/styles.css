@@ -311,6 +311,13 @@ label:focus-within {
     transform 0.2s;
 }
 
+/* Below the scoreboard when there is no room beside it. */
+@media (max-width: 1240px) {
+  .serve-panel {
+    top: 136px;
+  }
+}
+
 .serve-panel[data-stage='aim'],
 .serve-panel[data-stage='toss'] {
   opacity: 1;

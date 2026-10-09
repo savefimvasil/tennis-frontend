@@ -263,9 +263,13 @@ function launch(req: ShotRequest, speed: number, pitch: number): { v: V3; w: V3;
   return { v, w, d }
 }
 
+// The solver runs many trial flights per shot; it uses the physics step (1/120 s), which
+// also matches what Rapier integrates, and stops sampling (only the bounce matters).
+const SOLVER_OPTS: SimOptions = { maxBounces: 1, maxT: 5, sampleEvery: 1_000_000 }
+
 function carry(req: ShotRequest, speed: number, pitch: number): { dist: number; flight: Flight } {
   const { v, w, d } = launch(req, speed, pitch)
-  const flight = simulate(req.from, v, w, { maxBounces: 1, dt: 1 / 240, maxT: 5 })
+  const flight = simulate(req.from, v, w, SOLVER_OPTS)
   const b = flight.bounces[0]
   if (!b) return { dist: Infinity, flight }
   return { dist: (b.x - req.from.x) * d.x + (b.z - req.from.z) * d.z, flight }
@@ -300,7 +304,7 @@ function solveOnce(req: ShotRequest): ShotSolution {
   if (req.lobPitch !== undefined) {
     let lo = 4
     let hi = 45
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < 24 && hi - lo > 0.01; i++) {
       const mid = (lo + hi) / 2
       if (carry(req, mid, req.lobPitch).dist < goal) lo = mid
       else hi = mid
@@ -322,7 +326,8 @@ function solveOnce(req: ShotRequest): ShotSolution {
       speed *= 0.9
       continue
     }
-    for (let i = 0; i < 28; i++) {
+    // ~0.0005 rad is far below what changes the landing spot by a centimetre.
+    for (let i = 0; i < 22 && hi - lo > 0.0005; i++) {
       const mid = (lo + hi) / 2
       if (carry(req, speed, mid).dist < goal) lo = mid
       else hi = mid
@@ -337,7 +342,7 @@ function solveOnce(req: ShotRequest): ShotSolution {
 
 function finish(req: ShotRequest, speed: number, pitch: number): ShotSolution {
   const { v, w } = launch(req, speed, pitch)
-  const flight = simulate(req.from, v, w, { maxBounces: 1, dt: 1 / 240, maxT: 5 })
+  const flight = simulate(req.from, v, w, { maxBounces: 1, maxT: 5 })
   const b = flight.bounces[0]
   return { v, w, flight, landing: b ? { x: b.x, z: b.z } : { x: req.target.x, z: req.target.z } }
 }

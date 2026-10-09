@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react
 import { useGLTF, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { Joint } from './poses'
 import { Racket } from './Racket'
 import { SKINS, type Skin } from './skins'
@@ -111,6 +112,48 @@ function recolourShirt(src: THREE.Texture, hex: string): THREE.Texture {
 
 const worldPos = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3())
 
+/**
+ * The exported avatar is split into ~7 skinned primitives that share one skeleton.
+ * Merging those that share a material cuts draw calls (and skinning passes, shadows
+ * included) from ~7 to 2-3 per player.
+ */
+function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THREE.Material) {
+  const meshes: THREE.SkinnedMesh[] = []
+  scene.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) meshes.push(o as THREE.SkinnedMesh)
+  })
+  const groups = new Map<THREE.Material, THREE.SkinnedMesh[]>()
+  for (const m of meshes) {
+    const mat = pick(Array.isArray(m.material) ? m.material[0] : m.material)
+    groups.set(mat, [...(groups.get(mat) ?? []), m])
+  }
+  for (const [mat, list] of groups) {
+    const first = list[0]
+    const geometry = list.length > 1 ? mergeGeometries(list.map((m) => m.geometry)) : first.geometry
+    if (!geometry) {
+      // Incompatible attributes: keep the parts as they are.
+      for (const m of list) {
+        m.material = mat
+        m.castShadow = m.receiveShadow = true
+        m.frustumCulled = false
+      }
+      continue
+    }
+    const merged = new THREE.SkinnedMesh(geometry, mat)
+    merged.name = first.name
+    merged.position.copy(first.position)
+    merged.quaternion.copy(first.quaternion)
+    merged.scale.copy(first.scale)
+    merged.bind(first.skeleton, first.bindMatrix)
+    merged.castShadow = true
+    merged.receiveShadow = true
+    // Skinned bounds follow the rest pose; skip culling so swings never pop out.
+    merged.frustumCulled = false
+    first.parent!.add(merged)
+    for (const m of list) m.parent!.remove(m)
+  }
+}
+
 /** Rotates a bone about a world-space axis, in the current pose. */
 function rotateBoneWorld(bone: THREE.Object3D, axis: THREE.Vector3, angle: number) {
   const r = new THREE.Quaternion().setFromAxisAngle(axis, angle)
@@ -178,20 +221,9 @@ export function RocketboxBody({
     for (const t of [tex.body, tex.head]) t.colorSpace = THREE.SRGBColorSpace
     for (const t of Object.values(tex)) if (t) t.anisotropy = 8
     const bodyMap = skin.shirt ? recolourShirt(tex.body, skin.shirt) : tex.body
-    const body = new THREE.MeshPhysicalMaterial({
-      map: bodyMap,
-      normalMap: tex.bodyNormal,
-      roughness: 0.72,
-      sheen: 0.35,
-      sheenRoughness: 0.7,
-      sheenColor: new THREE.Color('#ffffff'),
-    })
-    const head = new THREE.MeshPhysicalMaterial({
-      map: tex.head,
-      normalMap: tex.headNormal,
-      roughness: 0.55,
-      sheen: 0.15,
-    })
+    // Standard (not physical/sheen) materials: the players fill a lot of pixels near the camera.
+    const body = new THREE.MeshStandardMaterial({ map: bodyMap, normalMap: tex.bodyNormal, roughness: 0.72 })
+    const head = new THREE.MeshStandardMaterial({ map: tex.head, normalMap: tex.headNormal, roughness: 0.55 })
     const hair = new THREE.MeshStandardMaterial({
       map: tex.head,
       alphaMap: tex.opacity,
@@ -199,18 +231,9 @@ export function RocketboxBody({
       side: THREE.DoubleSide,
       roughness: 0.7,
     })
-    scene.traverse((o) => {
-      const m = o as THREE.SkinnedMesh
-      if (!m.isMesh) return
-      m.castShadow = true
-      m.receiveShadow = true
-      // Skinned bounds follow the rest pose; skip culling so swings never pop out.
-      m.frustumCulled = false
-      const pick = (mat: THREE.Material) =>
-        mat.name.includes('opacity') ? hair : mat.name.includes('head') ? head : body
-      m.material = Array.isArray(m.material) ? m.material.map(pick) : pick(m.material)
-    })
-
+    const pick = (mat: THREE.Material) =>
+      mat.name.includes('opacity') ? hair : mat.name.includes('head') ? head : body
+    mergeByMaterial(scene, pick)
     // Rest pose, measured in the avatar's own space (authored facing +z, metres).
     scene.updateMatrixWorld(true)
     const p = (n: string) => worldPos(scene.getObjectByName(n)!)

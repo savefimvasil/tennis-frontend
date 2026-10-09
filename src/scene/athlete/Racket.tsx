@@ -6,13 +6,7 @@ import { stringsTexture } from '../textures'
 export function Racket({ frame }: { frame: string }) {
   const mats = useMemo(
     () => ({
-      frame: new THREE.MeshPhysicalMaterial({
-        color: frame,
-        roughness: 0.25,
-        clearcoat: 1,
-        clearcoatRoughness: 0.15,
-        metalness: 0.1,
-      }),
+      frame: new THREE.MeshStandardMaterial({ color: frame, roughness: 0.25, metalness: 0.1 }),
       grip: new THREE.MeshStandardMaterial({ color: '#1c1c1e', roughness: 0.85 }),
       strings: new THREE.MeshStandardMaterial({
         color: '#f1f1e6',

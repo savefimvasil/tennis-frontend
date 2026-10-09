@@ -6,6 +6,7 @@ import { COURT } from '../game/constants'
 import {
   barkTexture,
   chainLinkTexture,
+  facadeTexture,
   frondTexture,
   hedgeTexture,
   rng,
@@ -92,7 +93,7 @@ function FencePosts() {
     ref.current.instanceMatrix.needsUpdate = true
   }, [points])
   return (
-    <instancedMesh ref={ref} args={[undefined, undefined, points.length]} castShadow>
+    <instancedMesh ref={ref} args={[undefined, undefined, points.length]}>
       <cylinderGeometry args={[0.045, 0.045, FH, 8]} />
       <meshStandardMaterial color="#2f3c35" metalness={0.6} roughness={0.4} />
     </instancedMesh>
@@ -147,10 +148,29 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
     heads.current.instanceColor!.needsUpdate = true
   }, [seats])
 
+  const tiers = useMemo(() => {
+    const steps: THREE.BufferGeometry[] = []
+    const seatsGeo: THREE.BufferGeometry[] = []
+    const tint = [new THREE.Color('#d6d2c8'), new THREE.Color('#c9c5bb')]
+    for (let row = 0; row < rows; row++) {
+      const step = new THREE.BoxGeometry(0.85, 0.42 * (row + 1), length + 0.6)
+      step.translate(x + facing * -row * 0.85, 0.21 * (row + 1), 0)
+      const c = tint[row % 2]
+      const colors = new Float32Array(step.attributes.position.count * 3)
+      for (let i = 0; i < colors.length; i += 3) colors.set([c.r, c.g, c.b], i)
+      step.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+      steps.push(step)
+      const seat = new THREE.BoxGeometry(0.38, 0.05, length)
+      seat.translate(x + facing * -row * 0.85 + facing * 0.15, 0.42 * (row + 1) + 0.02, 0)
+      seatsGeo.push(seat)
+    }
+    return { steps: mergeGeometries(steps), seats: mergeGeometries(seatsGeo) }
+  }, [x, rows, length, facing])
+
   const frame = useRef(0)
   useFrame((state) => {
-    // Update every other frame: cheap idle sway, bigger bounce on applause.
-    if (frame.current++ % 2) return
+    // Idle sway only needs ~20 updates a second.
+    if (frame.current++ % 3) return
     const t = state.clock.elapsedTime
     seats.forEach((s, i) => {
       const bob = Math.sin(t * 1.3 + s.phase) * 0.015
@@ -169,24 +189,20 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
 
   return (
     <group>
-      {Array.from({ length: rows }, (_, row) => (
-        <group key={row}>
-          <mesh position={[x + facing * -row * 0.85, 0.21 * (row + 1), 0]} castShadow receiveShadow>
-            <boxGeometry args={[0.85, 0.42 * (row + 1), length + 0.6]} />
-            <meshStandardMaterial color={row % 2 ? '#c9c5bb' : '#d6d2c8'} roughness={0.9} />
-          </mesh>
-          <mesh position={[x + facing * -row * 0.85 + facing * 0.15, 0.42 * (row + 1) + 0.02, 0]} receiveShadow>
-            <boxGeometry args={[0.38, 0.05, length]} />
-            <meshStandardMaterial color="#2a5b8c" roughness={0.6} />
-          </mesh>
-        </group>
-      ))}
-      <instancedMesh ref={bodies} args={[undefined, undefined, seats.length]} castShadow>
-        <capsuleGeometry args={[0.17, 0.32, 4, 10]} />
+      {/* Tiers and seat benches merged into two meshes per stand */}
+      <mesh geometry={tiers.steps} receiveShadow>
+        <meshStandardMaterial vertexColors roughness={0.9} />
+      </mesh>
+      <mesh geometry={tiers.seats} receiveShadow>
+        <meshStandardMaterial color="#2a5b8c" roughness={0.6} />
+      </mesh>
+      {/* Spectators are seen from 15+ m away: low-poly and no shadow casting keeps them cheap. */}
+      <instancedMesh ref={bodies} args={[undefined, undefined, seats.length]}>
+        <capsuleGeometry args={[0.17, 0.32, 2, 6]} />
         <meshStandardMaterial roughness={0.85} />
       </instancedMesh>
-      <instancedMesh ref={heads} args={[undefined, undefined, seats.length]} castShadow>
-        <sphereGeometry args={[0.11, 12, 10]} />
+      <instancedMesh ref={heads} args={[undefined, undefined, seats.length]}>
+        <sphereGeometry args={[0.11, 7, 5]} />
         <meshStandardMaterial roughness={0.7} />
       </instancedMesh>
     </group>
@@ -299,12 +315,12 @@ function LightPole({ x, z }: { x: number; z: number }) {
   const facing = Math.atan2(-x, -z)
   return (
     <group position={[x, 0, z]} rotation-y={facing}>
-      <mesh position-y={6} castShadow>
+      <mesh position-y={6}>
         <cylinderGeometry args={[0.09, 0.14, 12, 10]} />
         <meshStandardMaterial color="#8a9096" metalness={0.7} roughness={0.35} />
       </mesh>
       <group position={[0, 12, 0.3]} rotation-x={0.5}>
-        <mesh castShadow>
+        <mesh>
           <boxGeometry args={[1.6, 0.6, 0.25]} />
           <meshStandardMaterial color="#5d646b" metalness={0.6} roughness={0.4} />
         </mesh>
@@ -387,7 +403,8 @@ function Bench({ z }: { z: number }) {
       {[0.2, 0.32].map((dz) => (
         <mesh key={dz} position={[0.1, 0.6, dz]} castShadow>
           <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
-          <meshPhysicalMaterial color="#9fd3ff" transmission={0.6} roughness={0.1} thickness={0.05} />
+          {/* Plain translucency: a transmission material would re-render the whole scene every frame */}
+          <meshStandardMaterial color="#9fd3ff" transparent opacity={0.6} roughness={0.15} />
         </mesh>
       ))}
     </group>
@@ -474,56 +491,44 @@ function Hills() {
 function Clubhouse() {
   const z = -FZ - 12
   const width = 34
-  const arches = Array.from({ length: 9 }, (_, i) => -width / 2 + 3 + i * ((width - 6) / 8))
+  const facade = useMemo(() => facadeTexture(9), [])
   const umbrellas = [-12, -6, 0, 6, 12]
   return (
     <group position={[0, 0, z]}>
       {/* Main block */}
-      <mesh position={[0, 3.6, -2]} castShadow receiveShadow>
+      <mesh position={[0, 3.6, -2]} receiveShadow>
         <boxGeometry args={[width, 7.2, 8]} />
         <meshStandardMaterial color="#efe8dc" roughness={0.9} />
       </mesh>
       {/* Hip roof */}
       {/* Scale after the 45 degree turn so the pyramid stays square to the walls */}
       <group position={[0, 8.4, -2]} scale={[width * 0.74, 1, 8 * 0.74]}>
-        <mesh rotation-y={Math.PI / 4} castShadow>
+        <mesh rotation-y={Math.PI / 4}>
           <coneGeometry args={[1, 2.4, 4, 1]} />
           <meshStandardMaterial color="#b4582f" roughness={0.75} />
         </mesh>
       </group>
-      {/* Arched openings facing the courts */}
-      {arches.map((x) => (
-        <group key={x} position={[x, 0, 2.02]}>
-          <mesh position-y={1.6}>
-            <planeGeometry args={[1.8, 3.2]} />
-            <meshStandardMaterial color="#2b3238" roughness={0.3} metalness={0.4} />
-          </mesh>
-          <mesh position-y={3.2}>
-            <circleGeometry args={[0.9, 20, 0, Math.PI]} />
-            <meshStandardMaterial color="#2b3238" roughness={0.3} metalness={0.4} />
-          </mesh>
-          <mesh position-y={5.6}>
-            <planeGeometry args={[1.4, 1.2]} />
-            <meshStandardMaterial color="#3a4652" roughness={0.25} metalness={0.5} />
-          </mesh>
-        </group>
-      ))}
+      {/* Arched openings painted on one facade texture: one draw call instead of 27 */}
+      <mesh position={[0, 3.6, 2.01]}>
+        <planeGeometry args={[width, 7.2]} />
+        <meshStandardMaterial map={facade} roughness={0.85} />
+      </mesh>
       {/* Terrace with sun umbrellas */}
-      <mesh position={[0, 0.2, 5]} receiveShadow castShadow>
+      <mesh position={[0, 0.2, 5]} receiveShadow>
         <boxGeometry args={[width, 0.4, 6]} />
         <meshStandardMaterial color="#d9cdb8" roughness={0.95} />
       </mesh>
       {umbrellas.map((x, i) => (
         <group key={x} position={[x, 0.4, 5]}>
-          <mesh position-y={1.2} castShadow>
+          <mesh position-y={1.2}>
             <cylinderGeometry args={[0.04, 0.04, 2.4, 6]} />
             <meshStandardMaterial color="#e9e4d8" />
           </mesh>
-          <mesh position-y={2.45} castShadow>
+          <mesh position-y={2.45}>
             <coneGeometry args={[1.5, 0.6, 12, 1, true]} />
             <meshStandardMaterial color={i % 2 ? '#f3efe6' : '#2c5d8f'} side={THREE.DoubleSide} roughness={0.8} />
           </mesh>
-          <mesh position-y={0.55} castShadow>
+          <mesh position-y={0.55}>
             <cylinderGeometry args={[0.5, 0.5, 0.05, 16]} />
             <meshStandardMaterial color="#f5f2ea" />
           </mesh>
@@ -544,7 +549,7 @@ function Hedges() {
   return (
     <group>
       {rows.map(([x, z, len, ry], i) => (
-        <mesh key={i} position={[x, 0.7, z]} rotation-y={ry} castShadow receiveShadow>
+        <mesh key={i} position={[x, 0.7, z]} rotation-y={ry} receiveShadow>
           <boxGeometry args={[len, 1.4, 1.2]} />
           <meshStandardMaterial map={tex} roughness={1} />
         </mesh>
