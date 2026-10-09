@@ -7,6 +7,9 @@ import { SERVE } from '../game/tuning'
 import type { Side } from '../game/constants'
 import { ArrowKeys, Key, Rolling } from './kit'
 
+/** Aim beyond which a first serve lands out (see serveTarget). */
+const AIM_IN = 1.14
+
 const GRADE_LABEL = { perfect: 'Perfect', good: 'Good', early: 'Early', late: 'Late' } as const
 
 function Scoreboard() {
@@ -154,6 +157,7 @@ function TimingGrade() {
 function LiveReadouts() {
   const meter = useRef<HTMLDivElement>(null)
   const fill = useRef<HTMLDivElement>(null)
+  const aimNeedle = useRef<HTMLDivElement>(null)
   const call = useRef<HTMLDivElement>(null)
   const speed = useRef<HTMLSpanElement>(null)
   const windArrow = useRef<HTMLSpanElement>(null)
@@ -170,6 +174,13 @@ function LiveReadouts() {
         if (meter.current.dataset.stage !== stageAttr) meter.current.dataset.stage = stageAttr
         const left = `${Math.round((m ?? 0) * 1000) / 10}%`
         if (fill.current.style.left !== left) fill.current.style.left = left
+        if (aimNeedle.current) {
+          const a = hudLive.serveAim
+          const aimLeft = `${Math.round(((a + SERVE.aimMax) / (2 * SERVE.aimMax)) * 1000) / 10}%`
+          if (aimNeedle.current.style.left !== aimLeft) aimNeedle.current.style.left = aimLeft
+          const out = Math.abs(a) > AIM_IN ? 'out' : Math.abs(a) > 0.8 ? 'line' : 'in'
+          if (aimNeedle.current.dataset.state !== out) aimNeedle.current.dataset.state = out
+        }
         let text = 'Hold a shot key to toss'
         let state = 'idle'
         if (stage === 'toss' && m !== null) {
@@ -204,6 +215,8 @@ function LiveReadouts() {
     return () => cancelAnimationFrame(raf)
   }, [])
   const span = SERVE.apex - SERVE.handHeight
+  // Share of the aim meter beyond each line (where the serve lands out).
+  const outPct = ((SERVE.aimMax - AIM_IN) / (2 * SERVE.aimMax)) * 100
   const lo = (SERVE.perfectY[0] - SERVE.handHeight) / span
   const hi = Math.min(1, (SERVE.perfectY[1] - SERVE.handHeight) / span)
   const goodLo = (SERVE.goodY[0] - SERVE.handHeight) / span
@@ -216,12 +229,19 @@ function LiveReadouts() {
             <Key k="right" /> step
           </span>
           <span className="step toss">hold a shot key to toss</span>
-          <span className="step hit">release in the zone · ←/→ angles it</span>
+          <span className="step hit">←/→ sweeps the aim · release in the zone</span>
         </div>
         <div className="serve-meter" aria-hidden>
           <div className="serve-good" style={{ left: `${goodLo * 100}%`, width: `${(lo - goodLo) * 100}%` }} />
           <div className="serve-perfect" style={{ left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }} />
           <div className="serve-ball" ref={fill} />
+        </div>
+        <div className="serve-aim" aria-hidden title="Aim: hold ← or → to sweep it; past the lines is out">
+          <div className="aim-out left" style={{ width: `${outPct}%` }} />
+          <div className="aim-out right" style={{ width: `${outPct}%` }} />
+          <div className="aim-line" style={{ left: `${outPct}%` }} />
+          <div className="aim-line" style={{ right: `${outPct}%` }} />
+          <div className="aim-needle" ref={aimNeedle} />
         </div>
         <div className="serve-call" ref={call}>
           Hold a shot key to toss

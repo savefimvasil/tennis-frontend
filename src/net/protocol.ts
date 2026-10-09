@@ -176,7 +176,10 @@ export interface StrikeIntent {
   /** Ball position at contact and its velocity just before. */
   p: V3
   vin: V3
-  /** Stick at contact, in the hitter's own view (x right, y up = deeper), each in [-1, 1]. */
+  /**
+   * Stick at contact, in the hitter's own view (x right, y up = deeper), each in [-1, 1].
+   * Serves send the swept aim instead, which may reach +-SERVE.aimMax (past the lines).
+   */
   aim: { x: number; y: number }
   /** Groundstrokes: when the shot key was pressed (server clock ms). */
   pressT?: number

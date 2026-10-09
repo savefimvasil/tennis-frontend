@@ -90,6 +90,12 @@ export const SERVE = {
   goodY: [2.15, 2.75] as const,
   /** From release to contact: the racket swings up from the trophy position. */
   swingTime: 0.15,
+  /**
+   * Serve direction works like power: holding left/right during the toss sweeps the aim at
+   * this rate (aim units per second). 1 is the line (wide or the T); past ~1.2 it is a fault.
+   */
+  aimRate: 2.8,
+  aimMax: 1.6,
 }
 
 export type Difficulty = 'easy' | 'pro' | 'ace'
@@ -111,6 +117,8 @@ export interface AiSpec {
   centre: number
   /** Extra error chance on serve returns, scaled by the serve's pace and how wide it is. */
   returnError: number
+  /** Extra sideways reach (m) when returning serve: lunges and blocked returns. */
+  returnReach: number
 }
 
 /** Help the human player gets at each difficulty. */
@@ -147,7 +155,8 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     serveFirst: 0.45,
     unforced: 0.07,
     centre: 0.5,
-    returnError: 0.22,
+    returnError: 0.2,
+    returnReach: 0.2,
   },
   pro: {
     speed: 5.6,
@@ -159,7 +168,8 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     serveFirst: 0.68,
     unforced: 0.05,
     centre: 0.28,
-    returnError: 0.24,
+    returnError: 0.12,
+    returnReach: 0.45,
   },
   ace: {
     speed: 6.6,
@@ -171,6 +181,7 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     serveFirst: 0.8,
     unforced: 0.045,
     centre: 0.15,
-    returnError: 0.32,
+    returnError: 0.12,
+    returnReach: 0.6,
   },
 }

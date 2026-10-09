@@ -67,16 +67,20 @@ export function serverXSign(server: Side, deuce: boolean): 1 | -1 {
   return (deuce ? s : -s) as 1 | -1
 }
 
-/** Serve aim from the stick: no target marker, the held arrow angles it wide or down the T. */
+/**
+ * Serve aim, in world x (the server's screen right is +x for the player): 0 is the middle
+ * of the box and +-1 lands just inside its side lines (wide, or down the T). The aim is
+ * swept by holding left/right during the toss, so it can overshoot: past ~1.15 it is out.
+ */
 export function serveTarget(server: Side, deuce: boolean, aimX: number, safe: boolean) {
   const boxSign = -serverXSign(server, deuce)
-  const centre = boxSign * 2.05
-  const span = safe ? 1.1 : 1.7
-  const x = Math.max(-3.75, Math.min(3.75, centre + aimX * span))
-  const xClamped = boxSign > 0 ? Math.max(0.3, x) : Math.min(-0.3, x)
+  // Box spans 0..4.115 from the centre line; aim it between ~0.25 m inside each line.
+  const centre = boxSign * 2.06
+  const span = 1.8
+  const x = centre + Math.max(-SERVE.aimMax, Math.min(SERVE.aimMax, aimX)) * span
   const depth = COURT.serviceLine - (safe ? 1.25 : 0.75)
   const receiverSign = server === HUMAN ? -1 : 1
-  return { x: xClamped, z: receiverSign * depth }
+  return { x, z: receiverSign * depth }
 }
 
 /** Groundstroke aim for a player defending +z: the stick steers across, up/down sets depth. */

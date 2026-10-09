@@ -75,6 +75,11 @@ export function botHuman(state: {
   pressAt?: number
   aim?: number
   aimUntil?: number
+  /** Stick held while serving (-1..1); a function picks it per serve. */
+  serveAim?: () => number
+  /** Toss release delay (s); 0.52 is near the top of the toss. */
+  releaseAfter?: number
+  chosenAim?: number
 }) {
   const a = sim.athletes[HUMAN]
   const g = useGame.getState()
@@ -84,10 +89,12 @@ export function botHuman(state: {
     if (sim.held) {
       if (state.tossAt < 0) {
         state.tossAt = sim.time
+        state.chosenAim = state.serveAim?.() ?? 0
         virtualInput.press('flat')
       }
-    } else if (sim.time - state.tossAt > 0.52) {
-      virtualInput.release('flat')
+    } else {
+      virtualInput.move.x = state.chosenAim ?? 0
+      if (sim.time - state.tossAt > (state.releaseAfter ?? 0.52)) virtualInput.release('flat')
     }
     return
   }

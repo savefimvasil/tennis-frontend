@@ -35,6 +35,8 @@ import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
 const force: V3 = { x: 0, y: 0, z: 0 }
 let serveClock = 0
+/** The player's serve aim, swept during the toss (see SERVE.aimRate). */
+let serveAim = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 
@@ -112,8 +114,10 @@ export function resetForServe() {
   s.x = xs * 0.75
   s.z = halfSign(server) * (COURT.halfLength + SERVE.baselineGap)
   const r = sim.athletes[receiver]
-  r.x = -xs * 2.85
-  r.z = halfSign(receiver) * (COURT.halfLength + 0.9)
+  // Returners stand deeper for first serves: more time to read and reach a fast, wide one.
+  const aiReceives = receiver === AI && !online
+  r.x = -xs * (aiReceives ? 2.6 : 2.85)
+  r.z = halfSign(receiver) * (COURT.halfLength + (aiReceives ? (sim.serveNumber === 1 ? 1.8 : 1.2) : 0.9))
 
   const ball = sim.ball
   if (ball) {
@@ -433,7 +437,7 @@ function updatePendingServe(side: Side) {
     true,
     null,
     0.3,
-    { x: Math.max(-1, Math.min(1, ps.aimX)), y: 0 },
+    { x: Math.max(-SERVE.aimMax, Math.min(SERVE.aimMax, ps.aimX)), y: 0 },
   )
 }
 
@@ -491,12 +495,17 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
       if (input.pressed.length) {
         a.vx = 0
         tossBall(a, input.pressed[input.pressed.length - 1])
+        serveAim = 0
+        hudLive.serveAim = 0
       }
       return
     }
     a.vx = a.vz = 0
     // Tossing: release the button (or press again) to hit, ideally near the top of the toss.
     hudLive.serveStage = 'toss'
+    // Direction is a skill like power: the held arrow sweeps the aim, which keeps going.
+    serveAim = Math.max(-SERVE.aimMax, Math.min(SERVE.aimMax, serveAim + input.moveX * SERVE.aimRate * dt))
+    hudLive.serveAim = serveAim
     hudLive.tossMeter = Math.max(0, Math.min(1, (p.y - SERVE.handHeight) / (SERVE.apex - SERVE.handHeight)))
     hudLive.tossFalling = v.y < 0
     if (a.pendingServe) {
@@ -506,7 +515,7 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     if (input.released.includes(a.swingShot) || input.pressed.length) {
       const grade = serveGrade(p.y, v.y)
       useGame.getState().showTiming(grade)
-      releaseServe(HUMAN, a.swingShot, grade, input.moveX)
+      releaseServe(HUMAN, a.swingShot, grade, serveAim)
       return
     }
     if (v.y < 0 && p.y < 1.25) retoss(a)
@@ -614,7 +623,8 @@ function updateAI(dt: number, p: V3, v: V3) {
       let grade = pickGrade(spec, second ? 0.4 : 0)
       if (second && grade !== 'perfect') grade = 'good'
       if (!second && Math.random() > spec.serveFirst && grade === 'good') grade = 'early'
-      const aim = [-1, 0, 1][Math.floor(Math.random() * 3)]
+      // Corners or the body, a little inside the lines (+-1 is on the line).
+      const aim = [-0.8, 0, 0.8][Math.floor(Math.random() * 3)] + (Math.random() - 0.5) * 0.3
       releaseServe(AI, a.swingShot, grade, aim)
     }
     return
@@ -629,7 +639,14 @@ function updateAI(dt: number, p: V3, v: V3) {
   if (incoming && sim.prediction) {
     const elapsed = sim.time - sim.predictionStart
     if (!a.target || Math.floor(elapsed * 10) !== Math.floor((elapsed - dt) * 10)) {
-      const plan = planIntercept(a, sim.prediction, elapsed, spec, sim.phase === 'serve')
+      const serveReturn = sim.phase === 'serve'
+      const plan = planIntercept(
+        a,
+        sim.prediction,
+        elapsed,
+        serveReturn ? { ...spec, reaction: spec.reaction * 0.4 } : spec,
+        serveReturn,
+      )
       if (plan) a.target = plan
     }
     // Decide once whether to leave a ball that is going out.
@@ -647,10 +664,12 @@ function updateAI(dt: number, p: V3, v: V3) {
   }
 
   const elapsed = sim.time - sim.predictionStart
-  const reacting = !incoming || elapsed > spec.reaction
+  // A returner reads the serve from the toss and the swing, so reacts much sooner to it.
+  const returning = incoming && sim.phase === 'serve'
+  const reacting = !incoming || elapsed > spec.reaction * (returning ? 0.4 : 1)
   let wantX = 0
   let wantZ = 0
-  const cap = spec.speed * (a.swing !== 'none' ? PLAYER.swingSlow : 1)
+  const cap = spec.speed * (a.swing !== 'none' ? PLAYER.swingSlow : 1) * (returning ? 1.1 : 1)
   if (a.target && reacting && !(incoming && aiLetGo)) {
     const dx = a.target.x - a.x
     const dz = a.target.z - a.z
@@ -666,7 +685,8 @@ function updateAI(dt: number, p: V3, v: V3) {
 
   if (!(sim.phase === 'rally' && incoming) || aiLetGo) return
   const contact = predictContact(a)
-  const win = inContactWindow(a, p)
+  // On the return of serve the AI stretches further: a lunge or a blocked return.
+  const win = inContactWindow(a, p, PLAYER.reach + (sim.hits === 1 ? spec.returnReach : 0))
   if (a.swing === 'none' && contact && contact.t - sim.time <= TIMING.swingLead)
     startSwing(a, contact.lateral, 'topspin', contact.y, contact)
   const due = a.swing !== 'none' ? sim.time >= a.contactAt - PHYSICS.timeStep / 2 : false
@@ -685,7 +705,7 @@ function updateAI(dt: number, p: V3, v: V3) {
       // Returning a serve: pace and being pulled wide force errors, even from the best.
       const serveSpeed = Math.hypot(sim.prevV.x, sim.prevV.y, sim.prevV.z)
       const quality =
-        Math.max(0, Math.min(1.4, (serveSpeed - 16) / 18)) + Math.max(0, Math.abs(win.lateral) - 0.8) * 0.6
+        Math.max(0, Math.min(1.2, (serveSpeed - 20) / 20)) + Math.min(0.5, Math.max(0, Math.abs(win.lateral) - 1) * 0.5)
       missChance += spec.returnError * quality
     }
     let miss: Miss = null

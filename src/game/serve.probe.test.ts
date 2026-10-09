@@ -29,11 +29,18 @@ it.skipIf(!process.env.PROBE)(
       g.start()
       resetForServe()
       const q = new RAPIER.EventQueue(true)
-      const bot = { tossAt: -1, pressedFor: 0 }
+      const exploit = !!process.env.EXPLOIT
+      const bot = {
+        tossAt: -1,
+        pressedFor: 0,
+        // The exploit: stick hard left or right, release at the top of the toss.
+        serveAim: exploit ? () => (Math.random() < 0.5 ? -1 : 1) * Number(process.env.EXPLOIT) : undefined,
+        releaseAfter: exploit ? 0.42 : undefined,
+      }
       let lastToast = 0,
         hitsMax = 0
-      const human = { pts: 0, won: 0, returned: 0, aces: 0 }
-      const ai = { pts: 0, won: 0, returned: 0, aces: 0 }
+      const human = { pts: 0, won: 0, returned: 0, aces: 0, faults: 0, doubles: 0, firstIn: 0, firsts: 0 }
+      const ai = { pts: 0, won: 0, returned: 0, aces: 0, faults: 0, doubles: 0, firstIn: 0, firsts: 0 }
       let serverAtStart = sim.server
       for (let step = 0; step < 120 * 60 * 60 && human.pts + ai.pts < 400; step++) {
         if (useGame.getState().match.winner !== null) {
@@ -53,6 +60,9 @@ it.skipIf(!process.env.PROBE)(
         const t = useGame.getState().toast
         if (t && t.id !== lastToast) {
           lastToast = t.id
+          const sv = serverAtStart === HUMAN ? human : ai
+          if (t.title === 'Fault' || t.title === 'Net') sv.faults++
+          if (t.title === 'Double fault') sv.doubles++
           if (t.title !== 'Fault' && t.title !== 'Net' && t.title !== 'Let') {
             const side = serverAtStart === HUMAN ? human : ai
             side.pts++
@@ -63,8 +73,10 @@ it.skipIf(!process.env.PROBE)(
           hitsMax = 0
         }
       }
-      const f = (x: { pts: number; won: number; returned: number; aces: number }) =>
-        `serve pts ${x.pts} won ${((x.won / x.pts) * 100).toFixed(0)}% returned ${((x.returned / x.pts) * 100).toFixed(0)}% aces ${x.aces}`
+      const pc = (n: number, d: number) => `${((n / Math.max(1, d)) * 100).toFixed(0)}%`
+      const f = (x: typeof human) =>
+        `serve pts ${x.pts} won ${pc(x.won, x.pts)} returned ${pc(x.returned, x.pts)} aces ${pc(x.aces, x.pts)} ` +
+        `faults ${x.faults} (${pc(x.faults, x.pts + x.faults)} of serves) doubles ${pc(x.doubles, x.pts)}`
       out.push(`${level}: HUMAN ${f(human)} | AI ${f(ai)}`)
     }
     writeFileSync('/tmp/serve-probe.txt', out.join('\n'))

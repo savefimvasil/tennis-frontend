@@ -1390,3 +1390,62 @@ button:disabled {
     transform: rotate(360deg);
   }
 }
+
+/* Serve aim: the needle sweeps while an arrow is held; past the lines is out. */
+.serve-aim {
+  position: relative;
+  height: 12px;
+  border-radius: 6px;
+  background: rgba(127, 227, 160, 0.38);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.aim-out {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(255, 138, 122, 0.45);
+}
+
+.aim-out.left {
+  left: 0;
+}
+
+.aim-out.right {
+  right: 0;
+}
+
+.aim-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: #ffffff;
+}
+
+.aim-needle {
+  position: absolute;
+  top: -1px;
+  width: 4px;
+  height: 14px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: #ffffff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+  left: 50%;
+  transition: background 0.1s;
+}
+
+.aim-needle[data-state='line'] {
+  background: var(--ball);
+}
+
+.aim-needle[data-state='out'] {
+  background: var(--lose);
+}
+
+.serve-panel[data-stage='aim'] .serve-aim {
+  opacity: 0.35;
+}

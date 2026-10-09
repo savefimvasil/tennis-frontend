@@ -188,4 +188,6 @@ export const hudLive = {
   wind: { x: 0, z: 0 },
   serveStage: null as 'aim' | 'toss' | null,
   tossFalling: false,
+  /** Serve aim during the toss: 0 middle of the box, +-1 the lines, beyond is out. */
+  serveAim: 0,
 }
