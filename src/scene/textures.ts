@@ -285,14 +285,13 @@ export function hedgeTexture() {
   })
 }
 
-/** Clubhouse front: stucco wall with arched doors below and windows above. */
+/** Clubhouse front: arched doors below and windows above, on a transparent wall. */
 export function facadeTexture(arches: number) {
   return memo('facade-' + arches, () => {
     const w = 1024
     const h = 220
     const { c, g } = canvas(w, h)
-    g.fillStyle = '#efe8dc'
-    g.fillRect(0, 0, w, h)
+    g.clearRect(0, 0, w, h)
     const step = (w - 120) / (arches - 1)
     for (let i = 0; i < arches; i++) {
       const x = 60 + i * step

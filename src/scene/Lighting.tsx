@@ -1,12 +1,23 @@
 import { Suspense, useLayoutEffect, useRef } from 'react'
 import { suspend } from 'suspend-react'
-import { Environment, Lightformer, Sky } from '@react-three/drei'
+import { Environment, Lightformer, Sky, useEnvironment, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
+import { FallbackOnError } from './PbrMaterial'
 
-// Late-afternoon coastal light: a low warm sun from behind the camera's right,
-// a cool sky fill, and an environment map for reflections and ambient light: a real
-// outdoor HDRI (Poly Haven "park", CC0, via @pmndrs/assets) with light cards on top.
-export const SUN_DIR = new THREE.Vector3(0.62, 0.4, 0.68).normalize()
+// Late-afternoon light: a low warm sun from behind the camera's right, a cool sky fill, and
+// a real sky as background and environment: Poly Haven "Lonely Road Afternoon (Pure Sky)",
+// CC0, 2K, stored as an SDR WebP plus a gain map (tools/textures/fetch.mjs). While it loads,
+// a procedural sky and light cards stand in; if it fails, the "park" HDRI from @pmndrs/assets.
+
+/** Sun in the HDRI as printed by tools/textures/fetch.mjs (three.js equirect convention). */
+const HDRI_SUN = new THREE.Vector3(0.7985, 0.1578, 0.5809)
+/** Turn the sky about the vertical so its sun sits behind the camera's right, as the court is staged. */
+const SKY_ROTATION = Math.atan2(HDRI_SUN.z, HDRI_SUN.x) - Math.atan2(0.68, 0.62)
+export const SUN_DIR = HDRI_SUN.clone()
+  .applyAxisAngle(new THREE.Vector3(0, 1, 0), SKY_ROTATION)
+  .normalize()
+
+const SKY_FILES = ['sky.webp', 'sky-gain.webp', 'sky.json'].map((f) => `${import.meta.env.BASE_URL}textures/sky/${f}`)
 
 export function Lighting({ shadowSize }: { shadowSize: number }) {
   const sun = useRef<THREE.DirectionalLight>(null!)
@@ -25,15 +36,7 @@ export function Lighting({ shadowSize }: { shadowSize: number }) {
   return (
     <>
       <color attach="background" args={['#e6d9c6']} />
-      <fog attach="fog" args={['#e4d6c2', 70, 460]} />
-      <Sky
-        distance={4500}
-        sunPosition={SUN_DIR.clone().multiplyScalar(100).toArray()}
-        turbidity={8}
-        rayleigh={2.1}
-        mieCoefficient={0.007}
-        mieDirectionalG={0.82}
-      />
+      <fog attach="fog" args={[FOG, 70, 460]} />
       <hemisphereLight args={['#b9cde6', '#6b5c42', 0.8]} />
       <directionalLight
         ref={sun}
@@ -45,11 +48,72 @@ export function Lighting({ shadowSize }: { shadowSize: number }) {
         shadow-bias={-0.0002}
         shadow-normalBias={0.03}
       />
-      {/* The HDRI arrives as a separate chunk; the light cards alone stand in until then. */}
-      <Suspense fallback={<SceneEnvironment />}>
-        <HdriEnvironment />
-      </Suspense>
+      <FallbackOnError
+        fallback={
+          <>
+            <ProceduralSky />
+            <Suspense fallback={<SceneEnvironment />}>
+              <HdriEnvironment />
+            </Suspense>
+          </>
+        }
+      >
+        <Suspense
+          fallback={
+            <>
+              <ProceduralSky />
+              <SceneEnvironment />
+            </>
+          }
+        >
+          <PhotoSky />
+        </Suspense>
+      </FallbackOnError>
     </>
+  )
+}
+
+/** Haze at the horizon of the HDRI, so distant hills fade into the sky. */
+const FOG = '#a3afb6'
+
+// The sky files are stored at 0.2256 x the HDRI's exposure (see sky.json); intensities set by eye.
+function PhotoSky() {
+  // Mipmapped, so the 2K sky is cheap to sample where it is minified on screen.
+  const hdr = useEnvironment({ files: SKY_FILES, extensions: mipmappedSky })
+  // Ambient light and reflections use the SDR layer: the same sky with the sun clipped. The
+  // directional light is the sun; keeping it in the environment too would light every
+  // surface a second time and wash out the shadows.
+  const sdr = useTexture(SKY_FILES[0])
+  useLayoutEffect(() => {
+    sdr.mapping = THREE.EquirectangularReflectionMapping
+    sdr.colorSpace = THREE.SRGBColorSpace
+    sdr.needsUpdate = true
+  }, [sdr])
+  const rotation: [number, number, number] = [0, SKY_ROTATION, 0]
+  return (
+    <>
+      <Environment map={hdr} background="only" backgroundIntensity={3.4} backgroundRotation={rotation} />
+      <Environment map={sdr} environmentIntensity={1.5} environmentRotation={rotation} />
+    </>
+  )
+}
+
+const mipmappedSky = (loader: THREE.Loader) =>
+  (loader as unknown as { setRenderTargetOptions(o: object): void }).setRenderTargetOptions({
+    generateMipmaps: true,
+    minFilter: THREE.LinearMipmapLinearFilter,
+  })
+
+function ProceduralSky() {
+  return (
+    <Sky
+      distance={4500}
+      sunPosition={SUN_DIR.clone().multiplyScalar(100).toArray()}
+      turbidity={8}
+      rayleigh={2.1}
+      mieCoefficient={0.007}
+      mieDirectionalG={0.82}
+    />
   )
 }
 

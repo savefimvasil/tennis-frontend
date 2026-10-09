@@ -1,8 +1,9 @@
 import * as THREE from 'three'
 import { rng } from './textures'
 
-// Procedural PBR maps for the court surfaces. Three layers per surface keep it from
-// looking like plastic:
+// Court surfaces. The photo-scanned detail (bottom of this file) is tinted by a procedural
+// macro colour map; the fully procedural maps below stand in while the photos load.
+// Three layers per surface keep it from looking like plastic:
 //  - a large non-repeating colour map over the whole area (tone variation, wear, stripes),
 //  - a fine tiling normal map for the grain (sand in acrylic, clay granules, grass blades),
 //  - a mid-scale roughness map so highlights break up instead of sliding across.
@@ -111,6 +112,7 @@ function colourMap(
   alt: THREE.Color,
   seed: number,
   extra?: (x: number, y: number) => number,
+  speckle = 0.16,
 ) {
   const macro = fbm(w, h, 4, 5, seed)
   const speck = fbm(w, h, 96, 2, seed + 3)
@@ -123,7 +125,7 @@ function colourMap(
           const i = y * w + x
           // Blend toward the alternate tone in patches, then add speckle and any pattern.
           const m = Math.max(0, Math.min(1, (macro[i] - 0.35) * 1.6))
-          const k = 1 + (speck[i] - 0.5) * 0.16 + (extra ? extra(x, y) : 0)
+          const k = 1 + (speck[i] - 0.5) * speckle + (extra ? extra(x, y) : 0)
           d[i * 4] = Math.min(255, (base.r + (alt.r - base.r) * m) * 255 * k)
           d[i * 4 + 1] = Math.min(255, (base.g + (alt.g - base.g) * m) * 255 * k)
           d[i * 4 + 2] = Math.min(255, (base.b + (alt.b - base.b) * m) * 255 * k)
@@ -224,4 +226,100 @@ export function surfaceMaterial(maps: SurfaceMaps, width: number, length: number
     // Ground reflects the sky only faintly; strong reflections are what read as plastic.
     envMapIntensity: 0.35,
   })
+}
+
+// ------------------------------------------------------------------ photo-scanned surfaces
+
+export type SurfaceKind = 'hard' | 'hardOuter' | 'clay' | 'grass' | 'lawn'
+
+/** Base and patch colours of the macro map per surface: the photo detail is tinted to these. */
+const MACRO: Record<SurfaceKind, [string, string, number]> = {
+  hard: ['#2b5c8e', '#336a9c', 5],
+  hardOuter: ['#3c7455', '#457e5c', 6],
+  clay: ['#c0603a', '#a54f2f', 33],
+  grass: ['#4b8638', '#5a8f3c', 43],
+  lawn: ['#55703c', '#4a6534', 47],
+}
+
+const macroCache = new Map<string, THREE.Texture>()
+
+/**
+ * The large non-repeating colour map laid once over the whole area: tone patches, plus clay
+ * brush streaks or mown stripes. Fine speckle is left to the photo detail.
+ */
+export function macroMap(kind: SurfaceKind, length: number) {
+  const key = 'macro' + kind + length
+  const hit = macroCache.get(key)
+  if (hit) return hit
+  const [base, alt, seed] = MACRO[kind]
+  let extra: ((x: number, y: number) => number) | undefined
+  if (kind === 'clay') {
+    const streak = fbm(256, 512, 2, 3, 37, 0.08)
+    extra = (x, y) => (streak[y * 256 + x] - 0.5) * 0.12
+  } else if (kind === 'grass') {
+    extra = (_x, y) => (Math.floor((y / 512) * (length / 2)) % 2 === 0 ? 1 : -1) * 0.07
+  }
+  const t = colourMap(256, 512, srgb(base), srgb(alt), seed, extra, 0.03)
+  macroCache.set(key, t)
+  return t
+}
+
+/** Tiling of the photo detail per surface, in metres. Different periods hide the repeat. */
+export const DETAIL = {
+  hard: { grainTile: 2.4, roughTile: 3.7, normalScale: 0.55, roughness: 1.3 },
+  clay: { grainTile: 1.8, roughTile: 2.9, normalScale: 0.45, roughness: 1.15 },
+  grass: { grainTile: 1.4, roughTile: 2.3, normalScale: 0.9, roughness: 1.3 },
+} as const
+
+/**
+ * Ground material: photo detail (colour normalised to a mean of linear 0.5, normal, roughness)
+ * tiled in metres, multiplied by the macro colour map that spans the whole `width` x `length`.
+ */
+export function detailSurfaceMaterial(
+  detail: { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture },
+  macro: THREE.Texture,
+  width: number,
+  length: number,
+  d: { grainTile: number; roughTile: number; normalScale: number; roughness: number },
+) {
+  const tile = (t: THREE.Texture, size: number) => {
+    const c = t.clone()
+    c.repeat.set(width / size, length / size)
+    c.needsUpdate = true
+    return c
+  }
+  const mat = new THREE.MeshStandardMaterial({
+    map: tile(detail.map, d.grainTile),
+    normalMap: tile(detail.normalMap, d.grainTile),
+    normalScale: new THREE.Vector2(d.normalScale, d.normalScale),
+    roughnessMap: tile(detail.roughnessMap, d.roughTile),
+    roughness: d.roughness,
+    metalness: 0,
+    envMapIntensity: 0.35,
+  })
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.macroMap = { value: macro }
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <uv_pars_vertex>', '#include <uv_pars_vertex>\nvarying vec2 vMacroUv;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMacroUv = uv;')
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <uv_pars_fragment>',
+        '#include <uv_pars_fragment>\nvarying vec2 vMacroUv;\nuniform sampler2D macroMap;',
+      )
+      .replace(
+        '#include <map_fragment>',
+        '#include <map_fragment>\ndiffuseColor.rgb *= 2.0 * texture2D( macroMap, vMacroUv ).rgb;',
+      )
+  }
+  mat.customProgramCacheKey = () => 'macro-detail'
+  // The tiled copies are owned by the material; the macro map is cached and shared.
+  const dispose = mat.dispose.bind(mat)
+  mat.dispose = () => {
+    mat.map?.dispose()
+    mat.normalMap?.dispose()
+    mat.roughnessMap?.dispose()
+    dispose()
+  }
+  return mat
 }

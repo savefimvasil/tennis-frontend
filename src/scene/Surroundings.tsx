@@ -13,6 +13,8 @@ import {
   windowsTexture,
   windscreenTexture,
 } from './textures'
+import { PbrMaterial, WithFallback } from './PbrMaterial'
+import { metreUvs } from './photoTextures'
 
 const FX = COURT.fenceX
 const FZ = COURT.fenceZ
@@ -155,6 +157,7 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
     for (let row = 0; row < rows; row++) {
       const step = new THREE.BoxGeometry(0.85, 0.42 * (row + 1), length + 0.6)
       step.translate(x + facing * -row * 0.85, 0.21 * (row + 1), 0)
+      metreUvs(step)
       const c = tint[row % 2]
       const colors = new Float32Array(step.attributes.position.count * 3)
       for (let i = 0; i < colors.length; i += 3) colors.set([c.r, c.g, c.b], i)
@@ -191,7 +194,15 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
     <group>
       {/* Tiers and seat benches merged into two meshes per stand */}
       <mesh geometry={tiers.steps} receiveShadow>
-        <meshStandardMaterial vertexColors roughness={0.9} />
+        <WithFallback fallback={<meshStandardMaterial vertexColors roughness={0.9} />}>
+          <PbrMaterial
+            set="venue/concrete"
+            repeat={[1 / 2.2, 1 / 2.2]}
+            vertexColors
+            roughness={1.7}
+            normalScale={0.8}
+          />
+        </WithFallback>
       </mesh>
       <mesh geometry={tiers.seats} receiveShadow>
         <meshStandardMaterial color="#2a5b8c" roughness={0.6} />
@@ -230,6 +241,10 @@ function palmGeometries() {
     pos.setZ(i, p.z + (pos.getZ(i) - p.z) * k)
   }
   trunk.computeVertexNormals()
+  // Tube UVs run (along, around); the bark photo runs (around, along). One tile wraps the
+  // trunk once; along the trunk it keeps the photo's aspect.
+  const uv = trunk.attributes.uv as THREE.BufferAttribute
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getY(i), uv.getX(i) * 7.5)
 
   const top = curve.getPointAt(1)
   const fronds: THREE.BufferGeometry[] = []
@@ -300,7 +315,9 @@ function Palms() {
   return (
     <group>
       <instancedMesh ref={trunkRef} args={[geo.trunk, undefined, spots.length]} castShadow>
-        <meshStandardMaterial map={bark} roughness={0.95} />
+        <WithFallback fallback={<meshStandardMaterial map={bark} roughness={0.95} />}>
+          <PbrMaterial set="venue/bark" repeat={[1, 1]} color="#d8cbb8" />
+        </WithFallback>
       </instancedMesh>
       <instancedMesh ref={frondRef} args={[geo.fronds, undefined, spots.length]} castShadow>
         <meshStandardMaterial map={frond} alphaTest={0.45} side={THREE.DoubleSide} roughness={0.8} />
@@ -487,36 +504,71 @@ function Hills() {
   )
 }
 
+/**
+ * Hip roof over a `width` x `depth` block, apex `height` above the eaves. UVs in metres:
+ * across along the eave, down the slope, so the tile rows stay level on every face.
+ */
+function roofGeometry(width: number, depth: number, height: number) {
+  // A four-sided cone turned 45 degrees and scaled: the pyramid stays square to the walls.
+  const g = new THREE.ConeGeometry(1, height, 4, 1, true).toNonIndexed()
+  g.rotateY(Math.PI / 4)
+  g.scale(width * 0.74, 1, depth * 0.74)
+  g.computeVertexNormals()
+  const pos = g.attributes.position
+  const nor = g.attributes.normal
+  const uv = g.attributes.uv as THREE.BufferAttribute
+  for (let i = 0; i < pos.count; i++) {
+    const nx = nor.getX(i)
+    const nz = nor.getZ(i)
+    // Distance down the slope from the apex: height drop over the sine of the pitch.
+    const slope = Math.hypot(nx, nz) || 1
+    uv.setXY(i, Math.abs(nz) > Math.abs(nx) ? pos.getX(i) : pos.getZ(i), (height / 2 - pos.getY(i)) / slope)
+  }
+  return g
+}
+
+const ROOF_TILE = 3
+const STUCCO_TILE = 2.5
+
 /** Clubhouse behind the far court: white stucco, terracotta roof, arched openings and a terrace. */
 function Clubhouse() {
   const z = -FZ - 12
   const width = 34
   const facade = useMemo(() => facadeTexture(9), [])
+  const geo = useMemo(
+    () => ({
+      walls: metreUvs(new THREE.BoxGeometry(width, 7.2, 8).translate(0, 3.6, -2)),
+      roof: roofGeometry(width, 8, 2.4).translate(0, 8.4, -2),
+      terrace: metreUvs(new THREE.BoxGeometry(width, 0.4, 6).translate(0, 0.2, 5)),
+    }),
+    [],
+  )
   const umbrellas = [-12, -6, 0, 6, 12]
   return (
     <group position={[0, 0, z]}>
       {/* Main block */}
-      <mesh position={[0, 3.6, -2]} receiveShadow>
-        <boxGeometry args={[width, 7.2, 8]} />
-        <meshStandardMaterial color="#efe8dc" roughness={0.9} />
+      <mesh geometry={geo.walls} receiveShadow>
+        <WithFallback fallback={<meshStandardMaterial color="#efe8dc" roughness={0.9} />}>
+          <PbrMaterial set="venue/stucco" repeat={[1 / STUCCO_TILE, 1 / STUCCO_TILE]} color="#f4ece0" />
+        </WithFallback>
       </mesh>
       {/* Hip roof */}
-      {/* Scale after the 45 degree turn so the pyramid stays square to the walls */}
-      <group position={[0, 8.4, -2]} scale={[width * 0.74, 1, 8 * 0.74]}>
-        <mesh rotation-y={Math.PI / 4}>
-          <coneGeometry args={[1, 2.4, 4, 1]} />
-          <meshStandardMaterial color="#b4582f" roughness={0.75} />
-        </mesh>
-      </group>
-      {/* Arched openings painted on one facade texture: one draw call instead of 27 */}
+      <mesh geometry={geo.roof}>
+        <WithFallback fallback={<meshStandardMaterial color="#b4582f" roughness={0.75} />}>
+          <PbrMaterial set="venue/roof" repeat={[1 / ROOF_TILE, 1 / ROOF_TILE]} />
+        </WithFallback>
+      </mesh>
+      {/* Arched openings painted on one facade texture: one draw call instead of 27. The wall
+          between them is transparent, so the stucco of the block shows through. */}
       <mesh position={[0, 3.6, 2.01]}>
         <planeGeometry args={[width, 7.2]} />
-        <meshStandardMaterial map={facade} roughness={0.85} />
+        <meshStandardMaterial map={facade} alphaTest={0.5} roughness={0.85} />
       </mesh>
       {/* Terrace with sun umbrellas */}
-      <mesh position={[0, 0.2, 5]} receiveShadow>
-        <boxGeometry args={[width, 0.4, 6]} />
-        <meshStandardMaterial color="#d9cdb8" roughness={0.95} />
+      <mesh geometry={geo.terrace} receiveShadow>
+        <WithFallback fallback={<meshStandardMaterial color="#d9cdb8" roughness={0.95} />}>
+          <PbrMaterial set="venue/paving" repeat={[1 / 2.8, 1 / 2.8]} roughness={1.1} />
+        </WithFallback>
       </mesh>
       {umbrellas.map((x, i) => (
         <group key={x} position={[x, 0.4, 5]}>
