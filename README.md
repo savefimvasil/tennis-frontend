@@ -90,6 +90,12 @@ LIVE_SERVER=http://localhost:3000 ROLE=guest npx vitest run src/net/online.live.
 
 Rendering is capped at 60 fps in play and 30 fps in menus, at a fixed resolution per setting.
 
+The crowd is made of sprite impostors of the players' own avatars, baked into an atlas at
+load (one draw call per stand). The umpire and ball kids are posed avatars, bounces leave
+ball marks, and the backdrop is a hillside town, a bay and a cloud layer.
+`docs/GRAPHICS.md` covers the research behind these, their cost per quality preset and the
+next steps.
+
 ## Physics Lab
 
 Open the game with `?lab` (e.g. `http://localhost:5173/?lab`) to get a live tuning panel

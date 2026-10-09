@@ -1,5 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { COURT } from '../game/constants'
@@ -10,11 +9,13 @@ import {
   frondTexture,
   hedgeTexture,
   rng,
-  windowsTexture,
   windscreenTexture,
 } from './textures'
 import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { metreUvs } from './photoTextures'
+import { Crowd, type Seat } from './Crowd'
+import { Officials } from './Officials'
+import { Backdrop } from './Backdrop'
 
 const FX = COURT.fenceX
 const FZ = COURT.fenceZ
@@ -104,51 +105,23 @@ function FencePosts() {
 
 // ------------------------------------------------------------------ stands + crowd
 
-const SHIRTS = [
-  '#e8e4dc',
-  '#2b4f7e',
-  '#c6463f',
-  '#f0c24b',
-  '#3b7a57',
-  '#1e1e24',
-  '#d97a3a',
-  '#7aa6d9',
-  '#ffffff',
-  '#9a5ba8',
-]
-const SKINS = ['#f1c9a5', '#d9a77f', '#b07c57', '#8d5a3b', '#5e3b25']
-
 function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number; length?: number; facing: 1 | -1 }) {
-  const bodies = useRef<THREE.InstancedMesh>(null!)
-  const heads = useRef<THREE.InstancedMesh>(null!)
   const seats = useMemo(() => {
     const r = rng(Math.abs(x) * 13)
-    const list: { x: number; y: number; z: number; phase: number; shirt: string; skin: string }[] = []
+    const list: Seat[] = []
     for (let row = 0; row < rows; row++) {
       for (let s = 0; s < Math.floor(length / 0.62); s++) {
-        if (r() < 0.22) continue
+        if (r() < 0.18) continue
         list.push({
-          x: x + facing * -row * 0.85,
-          y: 0.42 * (row + 1),
-          z: -length / 2 + s * 0.62 + 0.3 + (r() - 0.5) * 0.08,
-          phase: r() * Math.PI * 2,
-          shirt: SHIRTS[Math.floor(r() * SHIRTS.length)],
-          skin: SKINS[Math.floor(r() * SKINS.length)],
+          // Sat on the back half of the bench, toward the court.
+          x: x + facing * -row * 0.85 + facing * 0.08,
+          y: 0.42 * (row + 1) + 0.045,
+          z: -length / 2 + s * 0.62 + 0.3 + (r() - 0.5) * 0.1,
         })
       }
     }
     return list
   }, [x, rows, length, facing])
-
-  useLayoutEffect(() => {
-    const c = new THREE.Color()
-    seats.forEach((s, i) => {
-      bodies.current.setColorAt(i, c.set(s.shirt))
-      heads.current.setColorAt(i, c.set(s.skin))
-    })
-    bodies.current.instanceColor!.needsUpdate = true
-    heads.current.instanceColor!.needsUpdate = true
-  }, [seats])
 
   const tiers = useMemo(() => {
     const steps: THREE.BufferGeometry[] = []
@@ -170,26 +143,6 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
     return { steps: mergeGeometries(steps), seats: mergeGeometries(seatsGeo) }
   }, [x, rows, length, facing])
 
-  const frame = useRef(0)
-  useFrame((state) => {
-    // Idle sway only needs ~20 updates a second.
-    if (frame.current++ % 3) return
-    const t = state.clock.elapsedTime
-    seats.forEach((s, i) => {
-      const bob = Math.sin(t * 1.3 + s.phase) * 0.015
-      dummy.position.set(s.x - facing * 0.1, s.y + 0.3 + bob, s.z)
-      dummy.rotation.set(0, facing > 0 ? Math.PI / 2 : -Math.PI / 2, Math.sin(t * 0.7 + s.phase) * 0.05)
-      dummy.scale.setScalar(1)
-      dummy.updateMatrix()
-      bodies.current.setMatrixAt(i, dummy.matrix)
-      dummy.position.y += 0.33
-      dummy.updateMatrix()
-      heads.current.setMatrixAt(i, dummy.matrix)
-    })
-    bodies.current.instanceMatrix.needsUpdate = true
-    heads.current.instanceMatrix.needsUpdate = true
-  })
-
   return (
     <group>
       {/* Tiers and seat benches merged into two meshes per stand */}
@@ -207,15 +160,10 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
       <mesh geometry={tiers.seats} receiveShadow>
         <meshStandardMaterial color="#2a5b8c" roughness={0.6} />
       </mesh>
-      {/* Spectators are seen from 15+ m away: low-poly and no shadow casting keeps them cheap. */}
-      <instancedMesh ref={bodies} args={[undefined, undefined, seats.length]}>
-        <capsuleGeometry args={[0.17, 0.32, 2, 6]} />
-        <meshStandardMaterial roughness={0.85} />
-      </instancedMesh>
-      <instancedMesh ref={heads} args={[undefined, undefined, seats.length]}>
-        <sphereGeometry args={[0.11, 7, 5]} />
-        <meshStandardMaterial roughness={0.7} />
-      </instancedMesh>
+      {/* Spectators: sprite impostors of the real avatars, one draw call per stand. */}
+      <Suspense fallback={null}>
+        <Crowd seats={seats} seed={Math.abs(x)} />
+      </Suspense>
     </group>
   )
 }
@@ -377,19 +325,6 @@ function UmpireChair() {
         <boxGeometry args={[0.9, 0.5, 0.04]} />
         <meshStandardMaterial color="#1f4a3a" roughness={0.6} />
       </mesh>
-      {/* Umpire */}
-      <mesh position={[0, 2.45, -0.05]} castShadow>
-        <capsuleGeometry args={[0.18, 0.35, 4, 12]} />
-        <meshStandardMaterial color="#26385a" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 2.95, -0.05]} castShadow>
-        <sphereGeometry args={[0.11, 16, 12]} />
-        <meshStandardMaterial color="#c99a75" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 3.04, -0.05]} castShadow>
-        <cylinderGeometry args={[0.12, 0.12, 0.06, 16]} />
-        <meshStandardMaterial color="#f2f2f2" roughness={0.6} />
-      </mesh>
     </group>
   )
 }
@@ -429,46 +364,6 @@ function Bench({ z }: { z: number }) {
 }
 
 // ------------------------------------------------------------------ skyline + hills
-
-function Skyline() {
-  const ref = useRef<THREE.InstancedMesh>(null!)
-  const buildings = useMemo(() => {
-    const r = rng(1234)
-    const list: { x: number; z: number; w: number; d: number; h: number }[] = []
-    for (let i = 0; i < 70; i++) {
-      const ang = -Math.PI / 2 + (r() - 0.5) * Math.PI * 1.15
-      const dist = 240 + r() * 140
-      list.push({
-        x: Math.cos(ang) * dist,
-        z: Math.sin(ang) * dist,
-        w: 10 + r() * 18,
-        d: 10 + r() * 18,
-        h: 10 + Math.pow(r(), 3) * 55,
-      })
-    }
-    return list
-  }, [])
-  useLayoutEffect(() => {
-    const c = new THREE.Color()
-    buildings.forEach((b, i) => {
-      dummy.position.set(b.x, b.h / 2, b.z)
-      dummy.rotation.set(0, (i * 0.37) % Math.PI, 0)
-      dummy.scale.set(b.w, b.h, b.d)
-      dummy.updateMatrix()
-      ref.current.setMatrixAt(i, dummy.matrix)
-      ref.current.setColorAt(i, c.setHSL(0.07 + (i % 5) * 0.015, 0.16, 0.5 + (i % 3) * 0.06))
-    })
-    ref.current.instanceMatrix.needsUpdate = true
-    ref.current.instanceColor!.needsUpdate = true
-  }, [buildings])
-  const tex = useMemo(() => windowsTexture(), [])
-  return (
-    <instancedMesh ref={ref} args={[undefined, undefined, buildings.length]}>
-      <boxGeometry />
-      <meshStandardMaterial map={tex} roughness={0.5} metalness={0.2} />
-    </instancedMesh>
-  )
-}
 
 /** Distant chaparral ridgeline: a jagged strip that the fog turns into layered haze. */
 function Hills() {
@@ -619,6 +514,9 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       <FenceSide length={FZ * 2} position={[-FX, 0, 0]} rotationY={Math.PI / 2} />
       <FencePosts />
       <UmpireChair />
+      <Suspense fallback={null}>
+        <Officials detail={detail} />
+      </Suspense>
       <Bench z={-1.6} />
       <Bench z={1.6} />
       {[
@@ -634,7 +532,7 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       <Palms />
       <Hedges />
       <Clubhouse />
-      <Skyline />
+      <Backdrop detail={detail} />
       <Hills />
     </group>
   )

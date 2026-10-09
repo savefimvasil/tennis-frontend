@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { AI } from '../game/constants'
@@ -128,9 +128,108 @@ function EventFx() {
   )
 }
 
+const MARKS = 40
+const markDummy = new THREE.Object3D()
+
+/** How bounce marks look and last on each surface: clay keeps them, hard courts barely. */
+const MARK_STYLE = {
+  clay: { color: '#5a2614', strength: 0.85, life: 40 },
+  grass: { color: '#2c4419', strength: 0.55, life: 12 },
+  hard: { color: '#dfe6ee', strength: 0.3, life: 4 },
+} as const
+
+const markVertex = /* glsl */ `
+  attribute float aLife;
+  varying vec2 vUv;
+  varying float vLife;
+  void main() {
+    vUv = uv;
+    vLife = aLife;
+    gl_Position = projectionMatrix * viewMatrix * modelMatrix * instanceMatrix * vec4(position, 1.0);
+  }
+`
+const markFragment = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uStrength;
+  varying vec2 vUv;
+  varying float vLife;
+  void main() {
+    // A soft oval, a little denser at the leading end where the ball skidded out.
+    vec2 p = (vUv - 0.5) * 2.0;
+    float d = length(p);
+    float m = smoothstep(1.0, 0.25, d) * (0.75 + 0.25 * smoothstep(-1.0, 1.0, p.y));
+    float a = m * clamp(vLife, 0.0, 1.0) * uStrength;
+    if (a < 0.004) discard;
+    gl_FragColor = vec4(uColor, a);
+  }
+`
+
+/** Marks where the ball bounced, stretched along its path; they fade at a surface-dependent rate. */
+function BallMarks() {
+  const surface = useGame((s) => s.surface)
+  const mesh = useRef<THREE.InstancedMesh>(null!)
+  const state = useMemo(() => ({ next: 0, seen: 0, life: new Float32Array(MARKS) }), [])
+  const geometry = useMemo(() => {
+    const g = new THREE.PlaneGeometry(1, 1)
+    g.rotateX(-Math.PI / 2)
+    g.setAttribute('aLife', new THREE.InstancedBufferAttribute(state.life, 1))
+    return g
+  }, [state])
+  const style = MARK_STYLE[surface]
+  const material = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: markVertex,
+        fragmentShader: markFragment,
+        transparent: true,
+        depthWrite: false,
+        polygonOffset: true,
+        polygonOffsetFactor: -4,
+        uniforms: { uColor: { value: new THREE.Color(style.color) }, uStrength: { value: style.strength } },
+      }),
+    [style],
+  )
+  useEffect(() => () => material.dispose(), [material])
+  useEffect(() => () => geometry.dispose(), [geometry])
+  // A new court starts clean.
+  useEffect(() => void state.life.fill(0), [surface, state])
+
+  useFrame((_, dt) => {
+    const m = mesh.current
+    if (!m) return
+    const dummy = markDummy
+    for (const e of sim.events) {
+      if (e.id <= state.seen) continue
+      state.seen = e.id
+      if (e.kind !== 'bounce') continue
+      const v = sim.ball?.linvel()
+      const dir = v ? Math.atan2(v.x, v.z) : 0
+      const i = state.next++ % MARKS
+      // Faster, flatter bounces leave longer skids (a real clay mark is 15-30 cm long).
+      dummy.position.set(e.x, 0.004, e.z)
+      dummy.rotation.set(0, dir, 0)
+      dummy.scale.set(0.1, 1, 0.16 + e.power * 0.2)
+      dummy.updateMatrix()
+      m.setMatrixAt(i, dummy.matrix)
+      state.life[i] = 1
+      m.instanceMatrix.needsUpdate = true
+    }
+    let alive = false
+    for (let i = 0; i < MARKS; i++) {
+      if (state.life[i] <= 0) continue
+      state.life[i] = Math.max(0, state.life[i] - dt / style.life)
+      alive = true
+    }
+    if (alive) (m.geometry.attributes.aLife as THREE.BufferAttribute).needsUpdate = true
+  })
+
+  return <instancedMesh ref={mesh} args={[geometry, material, MARKS]} frustumCulled={false} renderOrder={1} />
+}
+
 export function Fx() {
   return (
     <>
+      <BallMarks />
       <BallBlob />
       <LandingMarker />
       <EventFx />

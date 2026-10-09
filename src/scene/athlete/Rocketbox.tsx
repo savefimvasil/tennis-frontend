@@ -11,7 +11,8 @@ import { SKINS, type Skin } from './skins'
 // The rig computes joint rotations in "arms hanging" space; each Rocketbox bone copies
 // its rig joint's world rotation, corrected from the avatar's A-pose rest orientation.
 
-const BASE = import.meta.env.BASE_URL + 'models/rocketbox/'
+export const AVATAR_BASE = import.meta.env.BASE_URL + 'models/rocketbox/'
+const BASE = AVATAR_BASE
 
 /** Rig proportions measured from the avatar's skeleton (metres). */
 export interface RigDims {
@@ -86,7 +87,7 @@ const qParent = new THREE.Quaternion()
 const vLift = new THREE.Vector3()
 
 /** Repaints the avatar's blue top in another colour, keeping the cloth shading. */
-function recolourShirt(src: THREE.Texture, hex: string): THREE.Texture {
+export function recolourShirt(src: THREE.Texture, hex: string): THREE.Texture {
   const img = src.image as HTMLImageElement
   const canvas = document.createElement('canvas')
   canvas.width = img.width
@@ -126,7 +127,10 @@ const worldPos = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3())
  * Merging those that share a material cuts draw calls (and skinning passes, shadows
  * included) from ~7 to 2-3 per player.
  */
-function mergeByMaterial(scene: THREE.Object3D, pick: (m: THREE.Material) => THREE.Material): THREE.BufferGeometry[] {
+export function mergeByMaterial(
+  scene: THREE.Object3D,
+  pick: (m: THREE.Material) => THREE.Material,
+): THREE.BufferGeometry[] {
   const created: THREE.BufferGeometry[] = []
   const meshes: THREE.SkinnedMesh[] = []
   scene.traverse((o) => {

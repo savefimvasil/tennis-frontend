@@ -224,26 +224,6 @@ export function barkTexture() {
   })
 }
 
-/** Office windows for the distant skyline, some of them lit. */
-export function windowsTexture() {
-  return memo('windows', () => {
-    const w = 128
-    const h = 256
-    const { c, g } = canvas(w, h)
-    g.fillStyle = '#5d6e80'
-    g.fillRect(0, 0, w, h)
-    const r = rng(19)
-    for (let y = 4; y < h; y += 10) {
-      for (let x = 4; x < w; x += 8) {
-        const lit = r()
-        g.fillStyle = lit > 0.93 ? '#ffe2a8' : lit > 0.5 ? '#3e4d5e' : '#8fa6bb'
-        g.fillRect(x, y, 5, 6)
-      }
-    }
-    return finish(c, { aniso: 2 })
-  })
-}
-
 /** Soft radial gradient used for blob shadows and dust puffs. */
 export function radialTexture() {
   return memo('radial', () => {
