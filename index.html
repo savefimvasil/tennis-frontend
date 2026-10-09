@@ -3,11 +3,104 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maybe Tennis? · Free 3D tennis game in your browser</title>
+    <meta
+      name="description"
+      content="Maybe Tennis? is a free 3D tennis game you play in the browser. Time your swing, serve aces and rally against the CPU on hard, clay or grass, or play a friend online. No download, no sign-up."
+    />
+    <meta
+      name="keywords"
+      content="tennis game, browser tennis, 3D tennis, online tennis, free tennis game, multiplayer tennis, play tennis online"
+    />
     <meta name="theme-color" content="#0d1620" />
-    <title>Baseline Tennis</title>
+    <meta name="color-scheme" content="dark" />
+    <link rel="canonical" href="https://maybe-tennis.com/" />
+
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Maybe Tennis?" />
+    <meta property="og:title" content="Maybe Tennis? · Free 3D tennis in your browser" />
+    <meta
+      property="og:description"
+      content="Time your swing, serve aces and rally against the CPU, or challenge a friend online. Free, no download."
+    />
+    <meta property="og:url" content="https://maybe-tennis.com/" />
+    <meta property="og:image" content="https://maybe-tennis.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Maybe Tennis? menu over a seaside tennis court" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Maybe Tennis? · Free 3D tennis in your browser" />
+    <meta
+      name="twitter:description"
+      content="Time your swing, serve aces and rally against the CPU, or challenge a friend online. Free, no download."
+    />
+    <meta name="twitter:image" content="https://maybe-tennis.com/og-image.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Maybe Tennis?",
+        "url": "https://maybe-tennis.com/",
+        "image": "https://maybe-tennis.com/og-image.png",
+        "description": "A free 3D tennis game in the browser: single player against the CPU on hard, clay or grass, and online matches against friends.",
+        "genre": ["Sports", "Tennis"],
+        "gamePlatform": "Web browser",
+        "applicationCategory": "Game",
+        "operatingSystem": "Any",
+        "playMode": ["SinglePlayer", "MultiPlayer"],
+        "numberOfPlayers": { "@type": "QuantitativeValue", "minValue": 1, "maxValue": 2 },
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <style>
+      /* Shown until the game loads (and to crawlers that do not run scripts). */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-content: center;
+        gap: 10px;
+        padding: 24px;
+        text-align: center;
+        background: #0d1620;
+        color: #eef3f7;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      .boot h1 {
+        margin: 0;
+        font:
+          italic 800 clamp(40px, 8vw, 72px) / 1 'Arial Narrow',
+          system-ui,
+          sans-serif;
+        text-transform: uppercase;
+        color: #d8f03c;
+      }
+      .boot p {
+        margin: 0 auto;
+        max-width: 34em;
+        color: #9aacbd;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="boot">
+        <h1>Maybe Tennis?</h1>
+        <p>
+          A free 3D tennis game in your browser. Time your swing, serve aces and rally against the CPU on hard, clay or
+          grass courts, or play a friend online. Loading the court…
+        </p>
+        <noscript><p>Maybe Tennis? needs JavaScript and WebGL to run.</p></noscript>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

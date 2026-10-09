@@ -5,9 +5,11 @@ import { Preload } from '@react-three/drei'
 import { Physics, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
 import { useFrame } from '@react-three/fiber'
 import { LAB_ENABLED, useLab } from '../lab/lab'
-import { PHYSICS } from '../game/constants'
+import * as THREE from 'three'
+import { HUMAN, PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
-import { useGame } from '../game/store'
+import { sim } from '../game/sim'
+import { hudLive, useGame } from '../game/store'
 import { Athlete, KITS } from './athlete/Athlete'
 import { opponentSkin, seatSkins, skinById } from './athlete/skins'
 import { useNet } from '../net/net'
@@ -53,6 +55,25 @@ function Players({ skin }: { skin: string }) {
       <Athlete side={1} kit={KITS.away} skin={opponentSkin(skin)} />
     </>
   )
+}
+
+const anchorPoint = new THREE.Vector3()
+
+/** Projects my player to the screen while I serve, for the serve meter that floats beside them. */
+function ServeAnchor() {
+  useFrame(({ camera, size }) => {
+    const a = hudLive.serveAnchor
+    if (!hudLive.serveStage) {
+      a.ok = false
+      return
+    }
+    const me = sim.athletes[HUMAN]
+    anchorPoint.set(me.x, 1.3, me.z).project(camera)
+    a.x = ((anchorPoint.x + 1) / 2) * size.width
+    a.y = ((1 - anchorPoint.y) / 2) * size.height
+    a.ok = anchorPoint.z < 1
+  })
+  return null
 }
 
 function GameLoop() {
@@ -143,6 +164,7 @@ export function Scene() {
         >
           {slow ? <SlowStepper scale={timeScale} /> : null}
           <GameLoop />
+          <ServeAnchor />
           <Court />
           <Net />
           <Ball />

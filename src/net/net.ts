@@ -45,7 +45,18 @@ interface NetStore {
   openRooms: OpenRoom[]
   queued: boolean
   error: string | null
+  /** Who is around, from the server's /health (null until known). */
+  lobby: LobbyCount | null
   setName(name: string): void
+}
+
+export interface LobbyCount {
+  /** Players with the game open. */
+  online: number
+  /** Matches being played. */
+  playing: number
+  /** Open games waiting for an opponent. */
+  open: number
 }
 
 const NAME_KEY = 'tennis.name'
@@ -69,6 +80,7 @@ export const useNet = create<NetStore>((set) => ({
   openRooms: [],
   queued: false,
   error: null,
+  lobby: null,
   setName: (name) => {
     try {
       localStorage.setItem(NAME_KEY, name)
@@ -114,8 +126,18 @@ async function probe(url: string): Promise<boolean> {
     const res = await fetch(`${url}/health`, { signal: ctl.signal })
     clearTimeout(timer)
     if (!res.ok) return false
-    const body = (await res.json()) as { status?: string; protocol?: number }
-    return body.status === 'ok' && body.protocol === PROTOCOL_VERSION
+    const body = (await res.json()) as {
+      status?: string
+      protocol?: number
+      online?: number
+      playing?: number
+      open?: number
+    }
+    if (body.status !== 'ok' || body.protocol !== PROTOCOL_VERSION) return false
+    useNet.setState({
+      lobby: { online: body.online ?? 0, playing: body.playing ?? 0, open: body.open ?? 0 },
+    })
+    return true
   } catch {
     return false
   }
@@ -134,6 +156,12 @@ export function startNet() {
     }
   }
   void attempt()
+}
+
+/** Re-reads the player counts (the main menu calls this while it is open). */
+export function refreshLobby() {
+  const { url, status } = useNet.getState()
+  if (url && status === 'up') void probe(url)
 }
 
 async function syncClock() {

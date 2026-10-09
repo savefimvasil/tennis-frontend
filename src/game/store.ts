@@ -190,4 +190,6 @@ export const hudLive = {
   tossFalling: false,
   /** Serve aim during the toss: 0 middle of the box, +-1 the lines, beyond is out. */
   serveAim: 0,
+  /** Where my server stands on screen (CSS px), so the serve meter can sit beside them. */
+  serveAnchor: { x: 0, y: 0, ok: false },
 }

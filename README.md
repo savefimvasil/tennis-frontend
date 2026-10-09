@@ -1,9 +1,15 @@
-# Baseline Tennis
+# Maybe Tennis?
 
 A browser tennis game inspired by GTA V's tennis minigame, built with React, Three.js
 (@react-three/fiber), Rapier physics and post-processing.
 
-Play it at https://savefimvasil.github.io/tennis-frontend/ (deployed from `main` by GitHub Actions).
+Play it at https://maybe-tennis.com/ (with online play) or
+https://savefimvasil.github.io/tennis-frontend/ (single player; both deployed from `main` by GitHub Actions).
+
+SEO and sharing: `index.html` carries the description, Open Graph and Twitter cards and
+schema.org `VideoGame` data, plus a static intro that crawlers see without JavaScript (React
+replaces it on load). `public/` holds the favicon (`favicon.svg`, PNG sizes rendered from it),
+`manifest.webmanifest`, `robots.txt`, `sitemap.xml` and `og-image.png` (the menu, 1200×630).
 
 ## Run
 

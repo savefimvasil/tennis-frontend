@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   ArrowsClockwise,
@@ -29,7 +29,7 @@ import { SKINS } from '../scene/athlete/skins'
 import type { FormatId } from '../game/scoring'
 import { initAudio } from '../audio/sound'
 import { flushInput } from '../input/input'
-import { leaveRoom, useNet } from '../net/net'
+import { leaveRoom, refreshLobby, useNet } from '../net/net'
 import { ArrowKeys, Key, overlayMotion, stagger, staggerItem } from './kit'
 
 interface Option<T> {
@@ -150,20 +150,20 @@ export function MainMenu() {
   return (
     <motion.div className="overlay menu" {...overlayMotion}>
       <motion.div className="menu-grid" {...stagger}>
-        <div className="menu-col">
+        <div className="menu-col hero">
           <motion.div className="eyebrow" {...staggerItem}>
             <TennisBall weight="fill" /> Vesper Bay Tennis Club · Late session
           </motion.div>
           <motion.h1 className="logo" {...staggerItem}>
-            Baseline<span>Tennis</span>
+            Maybe<span>Tennis?</span>
           </motion.h1>
           <motion.p className="lede" {...staggerItem}>
-            Hold the baseline, time your swing, and find the lines.
+            Time your swing, find the lines, beat the CPU or a friend.
           </motion.p>
           <motion.fieldset className="choice" {...staggerItem}>
             <legend>
               <User weight="bold" />
-              Player
+              Your player
             </legend>
             <div className="swatches">
               {SKINS.map((s) => (
@@ -188,19 +188,25 @@ export function MainMenu() {
               ))}
             </div>
           </motion.fieldset>
-          <motion.div className="menu-actions" {...staggerItem}>
-            <PlayButton onPlay={start} />
-            <OnlineButton />
-            <div className="menu-secondary">
-              <button className="ghost" onClick={() => setHelp(true)}>
-                <Keyboard weight="bold" /> Controls
-              </button>
-              <SoundToggle />
-            </div>
+          <motion.div className="modes" {...staggerItem}>
+            <CpuCard onPlay={start} />
+            <OnlineCard />
+          </motion.div>
+          <motion.div className="menu-secondary" {...staggerItem}>
+            <button className="ghost" onClick={() => setHelp(true)}>
+              <Keyboard weight="bold" /> Controls
+            </button>
+            <SoundToggle />
           </motion.div>
         </div>
         <motion.div className="menu-col settings" {...staggerItem}>
           <motion.div className="settings-inner" {...stagger}>
+            <div className="settings-head">
+              <h3>
+                <Trophy weight="bold" /> Match settings
+              </h3>
+              <span className="note">Also used for online games you create</span>
+            </div>
             <Choice
               name="Opponent"
               icon={<Robot weight="bold" />}
@@ -223,6 +229,7 @@ export function MainMenu() {
               value={format}
               onChange={setFormat}
             />
+            <div className="settings-rule" />
             <Choice
               name="Graphics"
               icon={<Monitor weight="bold" />}
@@ -238,26 +245,82 @@ export function MainMenu() {
   )
 }
 
-/** Shown only while a multiplayer server is reachable. */
-function OnlineButton() {
+const label = <T extends string>(options: Option<T>[], id: T) => options.find((o) => o.id === id)?.label ?? id
+
+/** Single player against the CPU, with the chosen settings as its subtitle. */
+function CpuCard({ onPlay }: { onPlay: () => void }) {
+  const { difficulty, surface, format } = useGame()
+  return (
+    <motion.button
+      className="mode cpu"
+      autoFocus
+      whileHover={{ y: -3 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => {
+        initAudio()
+        flushInput()
+        onPlay()
+      }}
+    >
+      <span className="mode-icon">
+        <Robot weight="fill" />
+      </span>
+      <span className="mode-text">
+        <span className="mode-title">Play vs CPU</span>
+        <span className="mode-sub">
+          {label(DIFFICULTIES, difficulty)} · {label(SURFACE_OPTIONS, surface)} · {label(FORMATS, format)}
+        </span>
+      </span>
+      <Key k="Enter" />
+    </motion.button>
+  )
+}
+
+/**
+ * Online play, as prominent as the CPU match. Shown only while a multiplayer server answers:
+ * the public build also runs with no server, and then plays offline only.
+ */
+function OnlineCard() {
   const status = useNet((s) => s.status)
+  const lobby = useNet((s) => s.lobby)
   const openOnline = useGame((s) => s.openOnline)
+  useEffect(() => {
+    if (status !== 'up') return
+    refreshLobby()
+    const t = setInterval(refreshLobby, 15_000)
+    return () => clearInterval(t)
+  }, [status])
+  const others = lobby ? Math.max(0, lobby.online - 1) : 0
+  const sub =
+    lobby && lobby.open > 0
+      ? `${lobby.open} open ${lobby.open === 1 ? 'game' : 'games'} waiting`
+      : others > 0
+        ? `${others} ${others === 1 ? 'player' : 'players'} online now`
+        : 'Quick match or invite a friend'
   return (
     <AnimatePresence>
       {status === 'up' ? (
         <motion.button
-          className="online-btn"
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
+          className="mode online"
+          initial={{ opacity: 0, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.96 }}
+          whileHover={{ y: -3 }}
+          whileTap={{ scale: 0.98 }}
           onClick={() => {
             initAudio()
             openOnline()
           }}
         >
-          <Globe weight="fill" />
-          <span>Play online</span>
-          <i className="live-dot" />
+          <span className="mode-icon">
+            <Globe weight="fill" />
+          </span>
+          <span className="mode-text">
+            <span className="mode-title">Play online</span>
+            <span className="mode-sub">
+              <i className="live-dot" /> {sub}
+            </span>
+          </span>
         </motion.button>
       ) : null}
     </AnimatePresence>
