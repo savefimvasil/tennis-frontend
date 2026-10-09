@@ -64,7 +64,7 @@ function buildWorld() {
 }
 
 /** Scripted human: walks to the predicted ball, swings with decent timing, aims around. */
-function botHuman(state: { tossAt: number; pressedFor: number }) {
+function botHuman(state: { tossAt: number; pressedFor: number; pressAt?: number; aim?: number; aimUntil?: number }) {
   const a = sim.athletes[HUMAN]
   const g = useGame.getState()
   virtualInput.move.x = 0
@@ -98,12 +98,18 @@ function botHuman(state: { tossAt: number; pressedFor: number }) {
     }
     if (sim.phase === 'rally' && v.z > 0.5 && !a.queued) {
       const tt = (a.z - 0.35 - p.z) / v.z
-      if (tt < 0.25 && tt > 0) {
+      // A decent club player: presses somewhere between 0.05 s and 0.5 s before contact.
+      if (state.pressAt === undefined) state.pressAt = 0.05 + Math.random() * 0.45
+      if (tt < state.pressAt && tt > 0) {
+        state.pressAt = undefined
         const shots: ShotType[] = ['topspin', 'topspin', 'slice', 'flat', 'lob']
         virtualInput.press(shots[Math.floor(Math.random() * shots.length)])
-        virtualInput.move.x = Math.random() * 2 - 1
+        state.aim = Math.random() * 2 - 1
+        state.aimUntil = sim.time + 0.6
       }
     }
+    // Hold the aim direction through contact, like a player pushing the stick.
+    if (state.aimUntil !== undefined && sim.time < state.aimUntil) virtualInput.move.x = state.aim ?? 0
   } else {
     virtualInput.move.x = Math.max(-1, Math.min(1, -a.x))
     virtualInput.move.y = -Math.max(-1, Math.min(1, (COURT.halfLength + 0.8 - a.z) * 2))
@@ -131,11 +137,13 @@ describe('full match simulation', () => {
     let phaseSince = sim.time
     let lastPhase = sim.phase
     let maxRally = 0
-    const bot = { tossAt: -1, pressedFor: 0 }
+    let totalHits = 0
+    let points = 0
+    const bot: { tossAt: number; pressedFor: number; pressAt?: number; aim?: number; aimUntil?: number } = { tossAt: -1, pressedFor: 0 }
     const dt = PHYSICS.timeStep
     let steps = 0
 
-    while (useGame.getState().match.winner === null && steps < 120 * 60 * 40) {
+    while (useGame.getState().match.winner === null && steps < 120 * 60 * 150) {
       botHuman(bot)
       stepGame(dt)
       world.step(queue)
@@ -149,6 +157,12 @@ describe('full match simulation', () => {
       if (st.toast && st.toast.id !== lastToast) {
         lastToast = st.toast.id
         endings.set(st.toast.title, (endings.get(st.toast.title) ?? 0) + 1)
+        totalHits += sim.hits
+        if ((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.DIAG && (st.toast.title === 'Out' || st.toast.title === 'Net')) {
+          const bp = ball.translation()
+          console.log('ERR', st.toast.title, 'by', sim.lastHitter, 'at', bp.x.toFixed(2), bp.z.toFixed(2), 'hits', sim.hits)
+        }
+        points++
       }
       maxRally = Math.max(maxRally, sim.hits)
       if (sim.phase !== lastPhase) {
@@ -162,7 +176,7 @@ describe('full match simulation', () => {
     const stats = useGame.getState().stats
     console.log(difficulty, 'sets', JSON.stringify(m.sets), 'winner', m.winner, 'minutes', (sim.time / 60).toFixed(1))
     console.log('endings', JSON.stringify(Object.fromEntries(endings)))
-    console.log('stats', JSON.stringify(stats), 'max rally', maxRally, 'longest phase s', longestPhase.toFixed(1))
+    console.log('stats', JSON.stringify(stats), 'avg rally', (totalHits / Math.max(1, points)).toFixed(1), 'max rally', maxRally, 'longest phase s', longestPhase.toFixed(1))
     expect(m.winner).not.toBeNull()
     expect(longestPhase).toBeLessThan(20)
     expect(maxRally).toBeGreaterThan(2)

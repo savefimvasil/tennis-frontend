@@ -27,24 +27,27 @@ export const SERVES: Record<ShotType, { speed: number; spin: number; netClearanc
 
 export type Grade = 'perfect' | 'good' | 'early' | 'late'
 
+/** pace: speed multiplier; error: standard deviation (m) of where the shot lands vs. the aim point. */
 export const GRADE_EFFECT: Record<Grade, { pace: number; error: number }> = {
-  perfect: { pace: 1.08, error: 0.25 },
-  good: { pace: 1, error: 0.75 },
-  early: { pace: 0.86, error: 1.6 },
-  late: { pace: 0.84, error: 1.7 },
+  perfect: { pace: 1.08, error: 0.28 },
+  good: { pace: 1, error: 0.55 },
+  early: { pace: 0.86, error: 1.05 },
+  late: { pace: 0.84, error: 1.15 },
 }
 
 export const TIMING = {
   /** Ideal time between pressing a shot button and the ball reaching the hitting plane. */
-  perfect: [0.1, 0.36] as const,
-  good: [0.04, 0.6] as const,
+  perfect: [0.13, 0.27] as const,
+  good: [0.05, 0.48] as const,
   /** Start the swing animation this long before contact. */
   swingLead: 0.2,
 }
 
 export const PLAYER = {
   speed: 6.2,
-  accel: 32,
+  /** Elite players reach ~5-6 m/s within 1 s; braking is quicker than accelerating. */
+  accel: 15,
+  brake: 26,
   swingSlow: 0.45,
   /** Max sideways distance from body to ball at contact. */
   reach: 1.55,
@@ -86,26 +89,26 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     reaction: 0.32,
     grades: { perfect: 0.1, good: 0.5, early: 0.2, late: 0.2 },
     readsOut: 0.3,
-    aimMargin: 1.4,
+    aimMargin: 1.5,
     serveFirst: 0.55,
-    unforced: 0.16,
+    unforced: 0.07,
   },
   pro: {
     speed: 5.8,
     reaction: 0.2,
     grades: { perfect: 0.3, good: 0.5, early: 0.1, late: 0.1 },
     readsOut: 0.7,
-    aimMargin: 0.95,
+    aimMargin: 1.3,
     serveFirst: 0.68,
-    unforced: 0.08,
+    unforced: 0.03,
   },
   ace: {
     speed: 6.6,
     reaction: 0.12,
     grades: { perfect: 0.55, good: 0.4, early: 0.03, late: 0.02 },
     readsOut: 0.95,
-    aimMargin: 0.6,
+    aimMargin: 1.0,
     serveFirst: 0.78,
-    unforced: 0.035,
+    unforced: 0.012,
   },
 }

@@ -65,9 +65,13 @@ export interface AiShot {
   target: { x: number; z: number }
 }
 
-export function chooseShot(ai: Athlete, ballY: number, lateral: number, spec: AiSpec): AiShot {
+export function chooseShot(ai: Athlete, ballY: number, lateral: number, spec: AiSpec, rallyHits = 0): AiShot {
   const human = sim.athletes[0]
-  const margin = spec.aimMargin + Math.random() * 0.5
+  // Attack short or sitting balls, and grow impatient as a rally drags on.
+  const sitter = ai.z > -9.5 || (ballY > 0.9 && ballY < 1.5 && Math.abs(lateral) < 0.9)
+  const impatience = Math.min(0.35, rallyHits / 40)
+  const aggression = (sitter ? 0.3 : 0) + impatience
+  const margin = Math.max(0.45, (spec.aimMargin + Math.random() * 0.5) * (1 - aggression))
   const wide = COURT.singlesHalfWidth - margin
   const stretched = Math.abs(lateral) > 1.15 || ballY < 0.35
   const humanAtNet = human.z < 6
@@ -75,7 +79,7 @@ export function chooseShot(ai: Athlete, ballY: number, lateral: number, spec: Ai
   const r = Math.random()
   if (humanAtNet) shot = r < 0.35 ? 'lob' : r < 0.75 ? 'topspin' : 'flat'
   else if (stretched) shot = r < 0.45 ? 'slice' : r < 0.7 ? 'lob' : 'topspin'
-  else if (ai.z > -8.5) shot = r < 0.6 ? 'flat' : 'topspin'
+  else if (sitter && Math.random() < 0.7) shot = r < 0.6 ? 'flat' : 'topspin'
   else shot = r < 0.68 ? 'topspin' : r < 0.84 ? 'slice' : 'flat'
 
   // Aim away from the human, sometimes through the middle to stay unpredictable.

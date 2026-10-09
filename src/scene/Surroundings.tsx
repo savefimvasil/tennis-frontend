@@ -346,13 +346,13 @@ function Skyline() {
     const list: { x: number; z: number; w: number; d: number; h: number }[] = []
     for (let i = 0; i < 70; i++) {
       const ang = -Math.PI / 2 + (r() - 0.5) * Math.PI * 1.15
-      const dist = 260 + r() * 160
+      const dist = 240 + r() * 140
       list.push({
         x: Math.cos(ang) * dist,
         z: Math.sin(ang) * dist,
         w: 10 + r() * 18,
         d: 10 + r() * 18,
-        h: 14 + Math.pow(r(), 3) * 80,
+        h: 10 + Math.pow(r(), 3) * 55,
       })
     }
     return list
@@ -365,7 +365,7 @@ function Skyline() {
       dummy.scale.set(b.w, b.h, b.d)
       dummy.updateMatrix()
       ref.current.setMatrixAt(i, dummy.matrix)
-      ref.current.setColorAt(i, c.setHSL(0.08 + (i % 5) * 0.02, 0.18, 0.72 + (i % 3) * 0.05))
+      ref.current.setColorAt(i, c.setHSL(0.07 + (i % 5) * 0.015, 0.16, 0.5 + (i % 3) * 0.06))
     })
     ref.current.instanceMatrix.needsUpdate = true
     ref.current.instanceColor!.needsUpdate = true
@@ -379,23 +379,37 @@ function Skyline() {
   )
 }
 
+/** Distant chaparral ridgeline: a jagged strip that the fog turns into layered haze. */
 function Hills() {
-  const hills = [
-    [-220, -330, 160, 45],
-    [-40, -380, 210, 70],
-    [190, -340, 170, 55],
-    [330, -150, 140, 40],
-    [-330, -120, 150, 38],
-  ]
+  const geo = useMemo(() => {
+    const r = rng(77)
+    const layers: THREE.BufferGeometry[] = []
+    for (let layer = 0; layer < 2; layer++) {
+      const dist = 420 + layer * 110
+      const segs = 90
+      const g = new THREE.PlaneGeometry(1, 1, segs, 1)
+      const pos = g.attributes.position as THREE.BufferAttribute
+      let h = 30
+      const heights: number[] = []
+      for (let i = 0; i <= segs; i++) {
+        h = Math.max(12, Math.min(75 + layer * 25, h + (r() - 0.48) * 14))
+        heights.push(h)
+      }
+      for (let i = 0; i < pos.count; i++) {
+        const col = Math.round((pos.getX(i) + 0.5) * segs)
+        const ang = -Math.PI / 2 + (col / segs - 0.5) * Math.PI * 1.5
+        const top = pos.getY(i) > 0
+        pos.setXYZ(i, Math.cos(ang) * dist, top ? heights[col] : -5, Math.sin(ang) * dist)
+      }
+      g.computeVertexNormals()
+      layers.push(g)
+    }
+    return mergeGeometries(layers)
+  }, [])
   return (
-    <group>
-      {hills.map(([x, z, r, h], i) => (
-        <mesh key={i} position={[x, -4, z]} scale={[r, h, r * 0.7]}>
-          <sphereGeometry args={[1, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2]} />
-          <meshStandardMaterial color="#6f7d5c" roughness={1} />
-        </mesh>
-      ))}
-    </group>
+    <mesh geometry={geo}>
+      <meshStandardMaterial color="#56603f" roughness={1} side={THREE.DoubleSide} />
+    </mesh>
   )
 }
 

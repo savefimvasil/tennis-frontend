@@ -362,6 +362,38 @@ label:focus-within {
   margin-top: -6px;
 }
 
+.wind {
+  position: absolute;
+  right: 22px;
+  bottom: 128px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 18px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.wind small {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wind-arrow {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--ball);
+  font-size: 18px;
+}
+
 .rally {
   position: absolute;
   top: 136px;
@@ -378,19 +410,26 @@ label:focus-within {
 
 .controls {
   position: absolute;
-  left: 50%;
+  left: 20px;
   bottom: 18px;
-  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
+  animation: controls-fade 1s ease 14s forwards;
   gap: 6px 16px;
   padding: 7px 14px;
   background: rgba(12, 22, 33, 0.55);
   border-radius: 6px;
   font-size: 13px;
   color: var(--muted);
-  max-width: calc(100% - 32px);
+  max-width: min(330px, calc(100% - 32px));
+}
+
+/* The hint fades once the player has had time to read it. */
+@keyframes controls-fade {
+  to {
+    opacity: 0.18;
+  }
 }
 
 /* ---------------------------------------------------------------- menus */

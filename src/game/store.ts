@@ -103,4 +103,5 @@ export const hudLive = {
   tossMeter: null as number | null,
   ballSpeedKmh: 0,
   lastShotKmh: 0,
+  wind: { x: 0, z: 0 },
 }

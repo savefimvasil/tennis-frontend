@@ -172,7 +172,8 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
     const lz = a.vx * sn + a.vz * c
     const speed = Math.hypot(lx, lz)
     const run = Math.min(1, speed / 4.5)
-    s.phase += dt * (5 + speed * 1.7)
+    // Stride-matched cycle: one full leg cycle (two steps) covers ~1.9 m, so feet don't skate.
+    s.phase += dt * speed * ((Math.PI * 2) / 1.9)
 
     // Legs: run toward the movement direction by twisting the hips.
     let heading = Math.atan2(lx, lz)
@@ -197,6 +198,17 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
     target.lift += Math.abs(Math.cos(s.phase)) * 0.05 * run + idle * (1 - run)
     target.j.spine[0] += 0.12 * run
 
+    // Split step: a small hop with feet apart as the opponent strikes.
+    if (a.split > 0 && a.swing === 'none') {
+      const u = 1 - a.split / 0.32
+      const hop = Math.sin(u * Math.PI)
+      target.lift += hop * 0.06 - (u > 0.7 ? (u - 0.7) * 0.25 : 0)
+      target.j.lHip[2] += 0.12 * hop
+      target.j.rHip[2] -= 0.12 * hop
+      target.j.lKnee[0] += 0.25 * (1 - hop)
+      target.j.rKnee[0] += 0.25 * (1 - hop)
+    }
+
     // Upper body: swing tracks override the ready stance.
     if (a.swing !== 'none') {
       const track = a.swing === 'forehand' ? FOREHAND : a.swing === 'backhand' ? BACKHAND : SERVE_KEYS
@@ -207,6 +219,23 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
         target.j[k][0] = tmpTrack.j[k][0]
         target.j[k][1] = tmpTrack.j[k][1]
         target.j[k][2] = tmpTrack.j[k][2]
+      }
+      if (a.swing !== 'serve') {
+        // Bend the swing to the ball: crouch for low balls, raise the arm for high ones.
+        const dy = Math.max(-0.8, Math.min(1.1, a.contactY - 1.0))
+        const w = Math.sin(Math.min(1, t / 0.45) * Math.PI)
+        const low = Math.min(0, dy)
+        target.lift += low * 0.32 * w
+        target.j.lKnee[0] -= low * 0.9 * w
+        target.j.rKnee[0] -= low * 0.9 * w
+        target.j.lHip[0] += low * 0.75 * w
+        target.j.rHip[0] += low * 0.75 * w
+        target.j.spine[0] -= low * 0.35 * w
+        if (a.swing === 'forehand') target.j.rSh[2] -= dy * 0.65 * w
+        else {
+          target.j.rSh[2] += dy * 0.55 * w
+          target.j.lSh[2] += dy * 0.55 * w
+        }
       }
       if (a.swing === 'serve') {
         for (const k of ['lHip', 'rHip', 'lKnee', 'rKnee'] as Joint[]) {

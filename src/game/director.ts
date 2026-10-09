@@ -3,7 +3,7 @@ import { isDeuceCourt } from './scoring'
 import { hudLive, useGame } from './store'
 import { pushEvent, sim, type Athlete } from './sim'
 import { AI_LEVELS, GRADE_EFFECT, PLAYER, SERVE, SERVES, SHOTS, TIMING, type Grade, type ShotType } from './tuning'
-import { aeroForce, inServiceBox, inSinglesCourt, simulate, solveShot, type V3 } from '../physics/flight'
+import { aeroForce, applyBounce, setWind, wind, inServiceBox, inSinglesCourt, simulate, solveShot, type V3 } from '../physics/flight'
 import { pollInput, type InputState } from '../input/input'
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
@@ -24,8 +24,12 @@ function right(a: Athlete) {
   return { x: -f.z, z: f.x }
 }
 
+/** Standard normal sample (Box-Muller), clipped to +-2.5 sigma. */
 function gauss() {
-  return (Math.random() + Math.random() + Math.random() - 1.5) / 1.5
+  const u = 1 - Math.random()
+  const v = Math.random()
+  const n = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
+  return Math.max(-2.5, Math.min(2.5, n))
 }
 
 /** Sideways sign (+1 right of centre mark) the server stands on, in world x. */
@@ -60,6 +64,12 @@ export function resetForServe() {
   aiLetGo = false
   serveClock = 0
   hudLive.tossMeter = null
+  // Coastal breeze: drifts a little between points, occasionally gusting.
+  const angle = Math.atan2(wind.z, wind.x) + (Math.random() - 0.5) * 0.9
+  const base = Math.hypot(wind.x, wind.z) * 0.6 + Math.random() * 1.4 + (Math.random() < 0.15 ? 1.5 : 0)
+  const speed = Math.min(3.5, base)
+  setWind(Math.cos(angle) * speed, Math.sin(angle) * speed)
+  hudLive.wind = { x: wind.x, z: wind.z }
 
   const server = sim.server
   const receiver = other(server)
@@ -129,16 +139,31 @@ function predictFromBall() {
 
 type Miss = 'net' | 'long' | 'wide' | null
 
-function strike(side: Side, shot: ShotType, grade: Grade, target: { x: number; z: number }, serve: boolean, miss: Miss = null) {
+function strike(
+  side: Side,
+  shot: ShotType,
+  grade: Grade,
+  target: { x: number; z: number },
+  serve: boolean,
+  miss: Miss = null,
+  lateral = 0,
+) {
   const ball = sim.ball
   if (!ball) return
   const a = sim.athletes[side]
   const from = ball.translation()
   const eff = GRADE_EFFECT[grade]
   const running = Math.hypot(a.vx, a.vz) > 3.2 ? 0.35 : 0
-  const errScale = (serve ? 0.5 : 1) * (eff.error + running)
-  let tx = target.x + gauss() * errScale
-  let tz = target.z + gauss() * errScale * 1.2
+  // Harder contacts are less accurate: incoming pace, awkward height, reaching wide.
+  const vin = ball.linvel()
+  const pace = Math.hypot(vin.x, vin.y, vin.z)
+  const height = from.y < 0.45 ? (0.45 - from.y) * 2.5 : from.y > 1.8 ? (from.y - 1.8) * 1.2 : 0
+  const reach = Math.max(0, Math.abs(lateral) - 0.9) * 1.2
+  const difficulty = serve ? 1 : 1 + Math.max(0, pace - 24) / 22 + height + reach
+  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty
+  // Depth scatters more than direction for real groundstrokes.
+  let tx = target.x + gauss() * errScale * 0.75
+  let tz = target.z + gauss() * errScale
   if (miss === 'long') tz += Math.sign(tz) * (COURT.halfLength - Math.abs(tz) + 0.4 + Math.random() * 1.2)
   if (miss === 'wide') tx = Math.sign(tx || 1) * (COURT.singlesHalfWidth + 0.3 + Math.random() * 1)
   const spec = serve ? SERVES[shot] : SHOTS[shot]
@@ -170,6 +195,8 @@ function strike(side: Side, shot: ShotType, grade: Grade, target: { x: number; z
   pushEvent({ kind: 'hit', x: from.x, y: from.y, z: from.z, power: Math.min(1, speed / 50) })
   if (side === HUMAN) sim.shake = Math.min(1, 0.25 + speed / 80)
   a.queued = null
+  // The opponent split-steps as the ball is struck.
+  sim.athletes[other(side)].split = 0.32
   if (!serve) useGame.getState().setRally(sim.hits)
   else useGame.getState().setRally(1)
   aiLetGo = false
@@ -179,10 +206,23 @@ function strike(side: Side, shot: ShotType, grade: Grade, target: { x: number; z
   }
 }
 
+/** Moves with bounded acceleration: speeding up is slower than braking, so changing direction costs time. */
 function moveAthlete(a: Athlete, wantX: number, wantZ: number, maxSpeed: number, dt: number) {
-  const k = Math.min(1, PLAYER.accel * dt / Math.max(0.001, maxSpeed))
-  a.vx += (wantX - a.vx) * k
-  a.vz += (wantZ - a.vz) * k
+  const dvx = wantX - a.vx
+  const dvz = wantZ - a.vz
+  const dv = Math.hypot(dvx, dvz)
+  if (dv > 1e-4) {
+    // Braking when the wanted velocity points against the current one.
+    const braking = wantX * a.vx + wantZ * a.vz < 0 || Math.hypot(wantX, wantZ) < Math.hypot(a.vx, a.vz)
+    const step = Math.min(dv, (braking ? PLAYER.brake : PLAYER.accel) * dt)
+    a.vx += (dvx / dv) * step
+    a.vz += (dvz / dv) * step
+  }
+  const sp = Math.hypot(a.vx, a.vz)
+  if (sp > maxSpeed && sp > 0) {
+    a.vx *= maxSpeed / sp
+    a.vz *= maxSpeed / sp
+  }
   a.x += a.vx * dt
   a.z += a.vz * dt
 }
@@ -221,8 +261,9 @@ function inContactWindow(a: Athlete, p: V3) {
   return { ok, passed: along < -PLAYER.contactBehind, lateral }
 }
 
-function startSwing(a: Athlete, lateral: number, shot: ShotType) {
+function startSwing(a: Athlete, lateral: number, shot: ShotType, ballY = 1) {
   if (a.swing !== 'none') return
+  a.contactY = ballY
   a.swing = lateral >= 0 ? 'forehand' : 'backhand'
   a.swingT = 0
   a.swingShot = shot
@@ -244,6 +285,7 @@ function updateSwing(a: Athlete, dt: number) {
     }
   }
   if (a.celebrate > 0) a.celebrate = Math.max(0, a.celebrate - dt)
+  if (a.split > 0) a.split = Math.max(0, a.split - dt)
 }
 
 // ---------------------------------------------------------------- serve
@@ -369,15 +411,15 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
 
   if (!a.queued || !canHit) return
   const win = inContactWindow(a, p)
-  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, a.queued.shot)
+  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, a.queued.shot, p.y + v.y * tt)
   if (win.ok) {
     const grade = a.queued.grade ?? 'late'
-    startSwing(a, win.lateral, a.queued.shot)
+    startSwing(a, win.lateral, a.queued.shot, p.y)
     useGame.getState().showTiming(grade)
     const spec = SHOTS[a.queued.shot]
     const tx = Math.max(-3.7, Math.min(3.7, input.moveX * 3.1))
     const depth = Math.max(4.8, Math.min(11.1, spec.depth + input.moveY * 1.7))
-    strike(HUMAN, a.queued.shot, grade, { x: tx, z: -depth }, false)
+    strike(HUMAN, a.queued.shot, grade, { x: tx, z: -depth }, false, null, win.lateral)
   } else if (win.passed) {
     startSwing(a, win.lateral, a.queued.shot)
     a.queued = null
@@ -456,21 +498,21 @@ function updateAI(dt: number, p: V3, v: V3) {
   if (!(sim.phase === 'rally' && incoming) || aiLetGo) return
   const tt = timeToPlane(a, p, v)
   const win = inContactWindow(a, p)
-  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, 'topspin')
+  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, 'topspin', p.y + v.y * tt)
   if (win.ok) {
-    const choice = chooseShot(a, p.y, win.lateral, spec)
+    const choice = chooseShot(a, p.y, win.lateral, spec, sim.hits)
     const grade = pickGrade(spec)
     // Pace and awkward height make errors more likely.
     const pace = Math.hypot(v.x, v.y, v.z)
-    const pressure = 1 + Math.max(0, pace - 18) / 14 + (p.y < 0.4 || p.y > 1.9 ? 0.6 : 0) + Math.abs(win.lateral) / 3
+    const pressure = 1 + Math.max(0, pace - 22) / 25 + (p.y < 0.4 || p.y > 1.9 ? 0.5 : 0) + Math.max(0, Math.abs(win.lateral) - 0.9) / 2
     let miss: Miss = null
     if (Math.random() < spec.unforced * pressure) {
       const r = Math.random()
       miss = r < 0.4 ? 'net' : r < 0.75 ? 'long' : 'wide'
     }
     a.swingShot = choice.shot
-    startSwing(a, win.lateral, choice.shot)
-    strike(AI, choice.shot, grade, choice.target, false, miss)
+    startSwing(a, win.lateral, choice.shot, p.y)
+    strike(AI, choice.shot, grade, choice.target, false, miss, win.lateral)
   }
 }
 
@@ -576,8 +618,21 @@ export function stepGame(dt: number) {
 
   const vNow = ball.linvel()
   const pNow = ball.translation()
-  if (!sim.held && sim.hits === hitsBefore && sim.prevVy < -0.4 && vNow.y > 0.05 && pNow.y < 0.25) onBounce(pNow, sim.prevVy)
-  sim.prevVy = vNow.y
+  if (!sim.held && sim.hits === hitsBefore && sim.prevVy < -0.4 && vNow.y > 0.05 && pNow.y < 0.25) {
+    // Rapier found the contact; replace its generic response with the tennis bounce model
+    // (the same one the predictor uses), starting from the pre-impact state.
+    const v2 = { ...sim.prevV }
+    const w2 = { ...sim.prevW }
+    applyBounce(v2, w2)
+    ball.setLinvel(v2, true)
+    ball.setAngvel(w2, true)
+    onBounce(pNow, sim.prevVy)
+  }
+  const vEnd = ball.linvel()
+  const wEnd = ball.angvel()
+  sim.prevVy = vEnd.y
+  sim.prevV = { x: vEnd.x, y: vEnd.y, z: vEnd.z }
+  sim.prevW = { x: wEnd.x, y: wEnd.y, z: wEnd.z }
   hudLive.ballSpeedKmh = Math.hypot(vNow.x, vNow.y, vNow.z) * 3.6
 
   // Balls that leave the venue count as hitting the fence.

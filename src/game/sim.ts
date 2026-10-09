@@ -24,6 +24,10 @@ export interface Athlete {
   /** Movement target for the AI. */
   target: { x: number; z: number } | null
   celebrate: number
+  /** Split-step timer (s remaining). */
+  split: number
+  /** Ball height expected at contact, used to bend the swing. */
+  contactY: number
 }
 
 export type RallyPhase = 'idle' | 'serve' | 'rally' | 'dead'
@@ -55,6 +59,8 @@ export const sim = {
   receiverTouched: false,
   deadTimer: 0,
   prevVy: 0,
+  prevV: { x: 0, y: 0, z: 0 },
+  prevW: { x: 0, y: 0, z: 0 },
   prevZ: 0,
   landing: null as { x: number; z: number; t: number } | null,
   /** Predicted flight of the current shot for AI and assists. */
@@ -79,6 +85,8 @@ function makeAthlete(yaw: number): Athlete {
     queued: null,
     target: null,
     celebrate: 0,
+    split: 0,
+    contactY: 1,
   }
 }
 

@@ -15,8 +15,22 @@ const CD = 0.55
 const AREA = Math.PI * BALL.radius * BALL.radius
 const K_AIR = 0.5 * RHO * AREA
 
-/** Aerodynamic force (N) for velocity v (m/s) and spin w (rad/s). Writes into `out`. */
-export function aeroForce(v: V3, w: V3, out: V3): V3 {
+/** Horizontal wind (m/s). Shared by the live ball and the predictor so aiming accounts for it. */
+export const wind: V3 = { x: 0, y: 0, z: 0 }
+
+export function setWind(x: number, z: number) {
+  wind.x = x
+  wind.z = z
+}
+
+const rel: V3 = { x: 0, y: 0, z: 0 }
+
+/** Aerodynamic force (N) for velocity v (m/s) and spin w (rad/s), relative to the wind. Writes into `out`. */
+export function aeroForce(vGround: V3, w: V3, out: V3): V3 {
+  rel.x = vGround.x - wind.x
+  rel.y = vGround.y
+  rel.z = vGround.z - wind.z
+  const v = rel
   const speed = Math.hypot(v.x, v.y, v.z)
   if (speed < 1e-4) {
     out.x = out.y = out.z = 0
@@ -104,6 +118,10 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
   for (let t = 0; t <= maxT; t += dt) {
     if (step++ % every === 0) samples.push({ t, x: p.x, y: p.y, z: p.z, vx: v.x, vy: v.y, vz: v.z })
     aeroForce(v, w, tmpF)
+    const damp = 1 / (1 + dt * SPIN_DAMPING)
+    w.x *= damp
+    w.y *= damp
+    w.z *= damp
     v.x += tmpF.x * invM * dt
     v.y += (tmpF.y * invM + PHYSICS.gravity) * dt
     v.z += tmpF.z * invM * dt
@@ -128,28 +146,52 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
   return { samples, bounces, netCrossY, netCrossX }
 }
 
-/** Impulse bounce on a horizontal surface: restitution + Coulomb friction on a solid sphere. */
-function applyBounce(v: V3, w: V3) {
-  const e = BALL.restitution
-  const mu = BALL.friction
+/**
+ * Tennis ball bounce on a hard court (after Cross 2005, "Bounce of a spinning ball near normal incidence",
+ * and Brody's sliding/gripping model). Mutates v and w.
+ * - Vertical restitution falls slightly with impact speed.
+ * - Friction acts on the contact point; if it is strong enough the ball grips (rolls) instead of sliding.
+ * - A tennis ball is a thick hollow shell: I = 0.55 m r^2.
+ */
+export function applyBounce(v: V3, w: V3, surface: Surface = HARD_COURT) {
   const r = BALL.radius
-  const vyIn = -v.y
+  const vyIn = Math.max(0, -v.y)
+  const e = Math.min(surface.eMax, Math.max(surface.eMin, surface.eMax - surface.eSlope * vyIn))
   v.y = e * vyIn
-  // Contact-point velocity u = v + w x (0,-r,0)
-  const ux = v.x - w.z * r
-  const uz = v.z + w.x * r
+  // Contact-point velocity u = v + w x (0, -r, 0)
+  const ux = v.x + w.z * r
+  const uz = v.z - w.x * r
   const u = Math.hypot(ux, uz)
   if (u < 1e-6) return
-  const dv = Math.min(mu * (1 + e) * vyIn, u * (2 / 7))
+  // Change in tangential speed needed to stop the contact point (grip), vs. what friction can supply (slide).
+  const gripDv = u * (ALPHA / (1 + ALPHA))
+  const slideDv = surface.mu * (1 + e) * vyIn
+  const dv = Math.min(gripDv, slideDv)
   const dx = (-ux / u) * dv
   const dz = (-uz / u) * dv
   v.x += dx
   v.z += dz
-  // dw = (5 / 2r^2) * (r_c x dv) with r_c = (0,-r,0)
-  const k = 5 / (2 * r)
+  // dw = (r_c x m dv) / I with r_c = (0, -r, 0)
+  const k = 1 / (ALPHA * r)
   w.x += -k * dz
   w.z += k * dx
 }
+
+export interface Surface {
+  eMax: number
+  eMin: number
+  eSlope: number
+  mu: number
+}
+
+/** Medium-fast acrylic hard court (ITF pace rating ~40). */
+export const HARD_COURT: Surface = { eMax: 0.81, eMin: 0.7, eSlope: 0.006, mu: 0.6 }
+
+/** Moment of inertia factor of a tennis ball (I = ALPHA m r^2). */
+export const ALPHA = 0.55
+
+/** Rapier's angular damping on the ball, mirrored by the predictor (spin decays ~5%/s). */
+export const SPIN_DAMPING = 0.05
 
 /** Unit spin axis that produces topspin for a ball travelling along horizontal direction (dx, dz). */
 export function topspinAxis(dx: number, dz: number): V3 {

@@ -74,6 +74,8 @@ function LiveReadouts() {
   const meter = useRef<HTMLDivElement>(null)
   const fill = useRef<HTMLDivElement>(null)
   const speed = useRef<HTMLSpanElement>(null)
+  const windArrow = useRef<HTMLSpanElement>(null)
+  const windText = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     let raf = 0
     let lastKmh = -1
@@ -87,6 +89,12 @@ function LiveReadouts() {
       if (speed.current && kmh !== lastKmh) {
         speed.current.textContent = kmh ? String(kmh) : '–'
         lastKmh = kmh
+      }
+      const w = hudLive.wind
+      if (windArrow.current && windText.current) {
+        // The camera looks down -z, so screen-up is -z and screen-right is +x.
+        windArrow.current.style.transform = `rotate(${Math.atan2(w.x, -w.z)}rad)`
+        windText.current.textContent = `${Math.round(Math.hypot(w.x, w.z) * 3.6)} km/h`
       }
       raf = requestAnimationFrame(tick)
     }
@@ -107,7 +115,14 @@ function LiveReadouts() {
       </div>
       <div className="speed">
         <span ref={speed}>–</span>
-        <small>km/h</small>
+        <small>km/h last shot</small>
+      </div>
+      <div className="wind" aria-label="Wind">
+        <span className="wind-arrow" ref={windArrow}>↑</span>
+        <span>
+          <small>Wind</small>
+          <span ref={windText}>0 km/h</span>
+        </span>
       </div>
     </>
   )
