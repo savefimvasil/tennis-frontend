@@ -63,7 +63,16 @@ const SHARE_HANG: Record<string, string> = { Bip01_L_Foot: 'Bip01_L_Calf', Bip01
 
 export interface RocketboxHandle {
   drive(joints: Record<Joint | 'pelvis', THREE.Object3D>, lift: number): void
+  /** World position of the racket's sweet spot (string-bed centre) after the last drive. */
+  sweetSpot(out: THREE.Vector3): THREE.Vector3
+  /** World position of the racket shoulder. */
+  shoulder(out: THREE.Vector3): THREE.Vector3
+  /** World position of the racket hand (wrist joint). */
+  hand(out: THREE.Vector3): THREE.Vector3
 }
+
+/** String-bed centre in racket-local space (see Racket.tsx: head at -0.47 under a +0.06 offset). */
+const SWEET_LOCAL = new THREE.Vector3(0, -0.41, 0)
 
 interface Driven {
   bone: THREE.Bone
@@ -294,7 +303,18 @@ export function RocketboxBody({
       for (const m of [body, head, hair]) m.dispose()
       if (bodyMap !== tex.body) bodyMap.dispose()
     }
-    return { scene, driven, hips, hipsRest: hips.position.clone(), dims, mount, dispose }
+    const shoulderBone = scene.getObjectByName('Bip01_R_UpperArm')!
+    return {
+      scene,
+      driven,
+      hips,
+      hipsRest: hips.position.clone(),
+      dims,
+      mount,
+      dispose,
+      shoulderBone,
+      handBone,
+    }
     // useTexture returns a fresh keyed object on every render, so depend on the textures
     // themselves: depending on `tex` rebuilt the whole avatar every frame.
   }, [gltf, tex.body, tex.bodyNormal, tex.head, tex.headNormal, tex.opacity, skin.shirt])
@@ -342,6 +362,18 @@ export function RocketboxBody({
           r.matrix.copy(r.parent.matrixWorld).invert().multiply(rig.mount.matrixWorld)
           r.matrixWorldNeedsUpdate = true
         }
+      },
+      sweetSpot(out) {
+        const r = racket.current
+        if (!r) return out.set(0, 0, 0)
+        r.updateWorldMatrix(true, false)
+        return out.copy(SWEET_LOCAL).applyMatrix4(r.matrixWorld)
+      },
+      shoulder(out) {
+        return rig.shoulderBone.getWorldPosition(out)
+      },
+      hand(out) {
+        return rig.handBone.getWorldPosition(out)
       },
     }),
     [rig],

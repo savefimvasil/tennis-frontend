@@ -92,7 +92,7 @@ export function Scene() {
           gravity={[0, PHYSICS.gravity, 0]}
           timeStep={PHYSICS.timeStep}
           paused={screen !== 'playing'}
-          interpolate
+          interpolate={false}
         >
           <GameLoop />
           <Court />

@@ -338,8 +338,48 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
     pelvis.current.position.y = dims.pelvisY + pose.lift
     pelvis.current.rotation.y = s.hipYaw
     if (body.current) {
-      jointMap.current ??= { ...jointObjects(refs), pelvis: pelvis.current }
-      body.current.drive(jointMap.current, pose.lift)
+      const joints = (jointMap.current ??= { ...jointObjects(refs), pelvis: pelvis.current })
+      const b = body.current
+      b.drive(joints, pose.lift)
+      // Racket-arm IK: around contact, turn the shoulder so the string bed points at the
+      // planned contact point, then pose the skeleton again with the correction.
+      const w = a.aim ? aimWeight(a.swing, a.swingT) : 0
+      if (w > 0 && a.aim) {
+        // Three-joint IK, a few passes: turn the shoulder toward the ball, turn the wrist so the
+        // racket head reaches out toward it, then bend or straighten the elbow by the length error.
+        ik.target.set(a.aim.x, a.aim.y, a.aim.z)
+        const sh = refs.rSh.current
+        const el = refs.rEl.current
+        const wr = refs.rWr.current
+        const turn = (joint: THREE.Object3D, pivot: THREE.Vector3) => {
+          ik.from.subVectors(ik.sweet, pivot).normalize()
+          ik.to.subVectors(ik.target, pivot).normalize()
+          ik.q.setFromUnitVectors(ik.from, ik.to)
+          ik.qw.identity().slerp(ik.q, w)
+          joint.getWorldQuaternion(ik.world).premultiply(ik.qw)
+          joint.parent!.getWorldQuaternion(ik.parent)
+          joint.quaternion.copy(ik.parent.invert().multiply(ik.world))
+          b.drive(joints, pose.lift)
+          b.sweetSpot(ik.sweet)
+        }
+        for (let pass = 0; pass < 3; pass++) {
+          b.shoulder(ik.shoulder)
+          b.sweetSpot(ik.sweet)
+          turn(sh, ik.shoulder)
+          b.hand(ik.hand)
+          turn(wr, ik.hand)
+          const error = ik.sweet.distanceTo(ik.shoulder) - ik.target.distanceTo(ik.shoulder)
+          // Elbow flexion is negative x; never hyperextend past straight.
+          el.rotation.x = Math.min(0, Math.max(-2.2, el.rotation.x - error * 1.6 * w))
+          b.drive(joints, pose.lift)
+        }
+        b.sweetSpot(ik.sweet)
+        b.shoulder(ik.shoulder)
+        turn(sh, ik.shoulder)
+      }
+      // Tell the game where the racket is, so the ball is struck from the strings.
+      b.sweetSpot(ik.sweet)
+      a.sweet = { x: ik.sweet.x, y: ik.sweet.y, z: ik.sweet.z }
     }
   })
 
@@ -414,6 +454,29 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       </group>
     </group>
   )
+}
+
+const ik = {
+  target: new THREE.Vector3(),
+  shoulder: new THREE.Vector3(),
+  hand: new THREE.Vector3(),
+  sweet: new THREE.Vector3(),
+  from: new THREE.Vector3(),
+  to: new THREE.Vector3(),
+  q: new THREE.Quaternion(),
+  qw: new THREE.Quaternion(),
+  world: new THREE.Quaternion(),
+  parent: new THREE.Quaternion(),
+}
+
+/** IK blend around the contact key: groundstrokes meet the ball at 0.2 s, the serve at 1.0 s. */
+function aimWeight(swing: string, t: number): number {
+  const contact = swing === 'serve' ? 1 : 0.2
+  const before = swing === 'serve' ? 0.12 : 0.14
+  const after = 0.16
+  if (t < contact - before || t > contact + after) return 0
+  const u = t < contact ? (t - (contact - before)) / before : 1 - (t - contact) / after
+  return u * u * (3 - 2 * u)
 }
 
 function jointObjects(refs: Record<Joint, React.RefObject<THREE.Group>>) {

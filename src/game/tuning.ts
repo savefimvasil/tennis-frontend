@@ -52,7 +52,7 @@ export const TIMING = {
   /** Ideal time between pressing a shot button and the ball reaching the hitting plane. */
   perfect: [0.13, 0.27] as const,
   good: [0.05, 0.48] as const,
-  /** Start the swing animation this long before contact. */
+  /** Contact happens this long after the swing starts (the contact key of the swing animation). */
   swingLead: 0.2,
 }
 
@@ -64,8 +64,12 @@ export const PLAYER = {
   swingSlow: 0.45,
   /** Max sideways distance from body to ball at contact. */
   reach: 1.55,
-  /** Ball is struck slightly in front of the body. */
-  contactAhead: 0.35,
+  /** Comfortable sideways distance to the ball at contact: arm plus racket on the forehand,
+   * closer on the two-handed backhand, where the racket arm reaches across the body. */
+  stance: 1.1,
+  stanceBackhand: 0.8,
+  /** Ball is struck in front of the body, as in a real forehand. */
+  contactAhead: 0.5,
   contactBehind: 0.45,
   minContactY: 0.12,
   maxContactY: 2.75,
@@ -75,12 +79,14 @@ export const PLAYER = {
 
 export const SERVE = {
   baselineGap: 0.35,
-  /** Toss apex ~3.05 m, ~0.57 s after release: contact near the top, as real servers do. */
-  tossSpeed: 5.6,
+  /** Toss apex ~2.7 m: within reach of the racket at full stretch (shoulder + arm + racket). */
+  tossSpeed: 4.95,
   handHeight: 1.45,
-  apex: 1.45 + (5.6 * 5.6) / (2 * 9.81),
-  perfectY: [2.85, 3.2] as const,
-  goodY: [2.5, 3.2] as const,
+  apex: 1.45 + (4.95 * 4.95) / (2 * 9.81),
+  perfectY: [2.45, 2.75] as const,
+  goodY: [2.15, 2.75] as const,
+  /** From release to contact: the racket swings up from the trophy position. */
+  swingTime: 0.15,
 }
 
 export type Difficulty = 'easy' | 'pro' | 'ace'

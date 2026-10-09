@@ -1,4 +1,4 @@
-import { AI, BALL, COURT, HUMAN, halfSign, other, type Side } from './constants'
+import { AI, BALL, COURT, HUMAN, PHYSICS, halfSign, other, type Side } from './constants'
 import { isDeuceCourt } from './scoring'
 import { hudLive, useGame } from './store'
 import { pushEvent, sim, type Athlete } from './sim'
@@ -103,6 +103,8 @@ export function resetForServe() {
     a.tossing = false
     a.queued = null
     a.target = null
+    a.pendingServe = null
+    a.aim = null
     a.yaw = side === HUMAN ? Math.PI : 0
   }
   const s = sim.athletes[server]
@@ -294,12 +296,64 @@ function inContactWindow(a: Athlete, p: V3) {
   return { ok, passed: along < -PLAYER.contactBehind, lateral }
 }
 
-function startSwing(a: Athlete, lateral: number, shot: ShotType, ballY = 1) {
+interface Contact {
+  t: number
+  x: number
+  y: number
+  z: number
+  lateral: number
+}
+
+/**
+ * Where and when the incoming ball crosses this athlete's hitting plane, from the predictor.
+ * The swing is timed to it and the racket arm aims at it, so racket and ball actually meet.
+ */
+function predictContact(a: Athlete): Contact | null {
+  const pred = sim.prediction
+  if (!pred) return null
+  const f = forward(a)
+  const r = right(a)
+  const elapsed = sim.time - sim.predictionStart
+  let prev: (typeof pred.samples)[number] | null = null
+  let prevAlong = 0
+  for (const s of pred.samples) {
+    const along = (s.x - a.x) * f.x + (s.z - a.z) * f.z - PLAYER.contactAhead
+    if (s.t >= elapsed && prev && prevAlong > 0 && along <= 0) {
+      const k = prevAlong / (prevAlong - along)
+      const x = prev.x + (s.x - prev.x) * k
+      const z = prev.z + (s.z - prev.z) * k
+      return {
+        t: sim.predictionStart + prev.t + (s.t - prev.t) * k,
+        x,
+        y: prev.y + (s.y - prev.y) * k,
+        z,
+        lateral: (x - a.x) * r.x + (z - a.z) * r.z,
+      }
+    }
+    prev = s
+    prevAlong = along
+  }
+  return null
+}
+
+/** Starts a groundstroke so its contact key lands exactly on the planned contact. */
+function startSwing(a: Athlete, lateral: number, shot: ShotType, ballY = 1, contact: Contact | null = null) {
   if (a.swing !== 'none') return
   a.contactY = ballY
   a.swing = lateral >= 0 ? 'forehand' : 'backhand'
-  a.swingT = 0
+  a.swingT = contact ? Math.max(0, TIMING.swingLead - (contact.t - sim.time)) : 0
   a.swingShot = shot
+  a.aim = contact ? { x: contact.x, y: contact.y, z: contact.z } : null
+  a.contactAt = contact ? contact.t : sim.time + TIMING.swingLead
+}
+
+/** Meets the ball with the racket: struck from the sweet spot when the renderer reports one nearby. */
+function snapBallToRacket(a: Athlete) {
+  const ball = sim.ball
+  const s = a.sweet
+  if (!ball || !s) return
+  const p = ball.translation()
+  if (Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z) < 0.7) ball.setTranslation(s, true)
 }
 
 function gradeFor(tt: number): Grade {
@@ -315,6 +369,7 @@ function updateSwing(a: Athlete, dt: number) {
     if (a.swingT > end) {
       a.swing = 'none'
       a.swingT = 0
+      a.aim = null
     }
   }
   if (a.celebrate > 0) a.celebrate = Math.max(0, a.celebrate - dt)
@@ -334,16 +389,33 @@ function serveTarget(server: Side, aimX: number, safe: boolean) {
   return { x: xClamped, z: halfSign(receiver) * depth }
 }
 
-function hitServe(side: Side, shot: ShotType, grade: Grade, aimX: number) {
+/** Release: the racket swings up from the trophy position and meets the ball SERVE.swingTime later. */
+function releaseServe(side: Side, shot: ShotType, grade: Grade, aimX: number) {
   const a = sim.athletes[side]
-  const second = sim.serveNumber === 2
-  const t = serveTarget(side, aimX, second)
+  const ball = sim.ball
+  if (!ball) return
+  const p = ball.translation()
+  const v = ball.linvel()
+  const t = SERVE.swingTime
+  a.pendingServe = { shot, grade, aimX }
   a.swing = 'serve'
-  a.swingT = 1
-  a.tossing = false
+  a.swingT = 1 - t
+  a.contactAt = sim.time + t
+  a.aim = { x: p.x + v.x * t, y: p.y + v.y * t + 0.5 * PHYSICS.gravity * t * t, z: p.z + v.z * t }
   hudLive.tossMeter = null
   hudLive.serveStage = null
-  strike(side, second && shot === 'flat' ? 'topspin' : shot, grade, t, true)
+}
+
+/** Called every step while a serve is pending; strikes once the racket reaches the ball. */
+function updatePendingServe(side: Side) {
+  const a = sim.athletes[side]
+  const ps = a.pendingServe
+  if (!ps || sim.time < a.contactAt - 1e-6) return
+  a.pendingServe = null
+  a.tossing = false
+  const second = sim.serveNumber === 2
+  snapBallToRacket(a)
+  strike(side, second && ps.shot === 'flat' ? 'topspin' : ps.shot, ps.grade, serveTarget(side, ps.aimX, second), true)
 }
 
 function tossBall(a: Athlete, shot: ShotType) {
@@ -367,6 +439,8 @@ function serveGrade(y: number, vy: number): Grade {
 }
 
 function retoss(a: Athlete) {
+  a.pendingServe = null
+  a.aim = null
   sim.held = true
   a.tossing = false
   a.swing = 'none'
@@ -407,10 +481,14 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     hudLive.serveStage = 'toss'
     hudLive.tossMeter = Math.max(0, Math.min(1, (p.y - SERVE.handHeight) / (SERVE.apex - SERVE.handHeight)))
     hudLive.tossFalling = v.y < 0
+    if (a.pendingServe) {
+      updatePendingServe(HUMAN)
+      return
+    }
     if (input.released.includes(a.swingShot) || input.pressed.length) {
       const grade = serveGrade(p.y, v.y)
       useGame.getState().showTiming(grade)
-      hitServe(HUMAN, a.swingShot, grade, input.moveX)
+      releaseServe(HUMAN, a.swingShot, grade, input.moveX)
       return
     }
     if (v.y < 0 && p.y < 1.25) retoss(a)
@@ -425,7 +503,8 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
 
   const canHit = sim.phase === 'rally' && sim.lastHitter === AI
   const incoming = sim.lastHitter === AI
-  const tt = canHit ? timeToPlane(a, p, v) : Infinity
+  const contact = incoming ? predictContact(a) : null
+  const tt = canHit ? (contact ? contact.t - sim.time : timeToPlane(a, p, v)) : Infinity
 
   if (input.pressed.length && (incoming || sim.phase === 'rally')) {
     const shot = input.pressed[input.pressed.length - 1]
@@ -439,29 +518,28 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   const speedCap = PLAYER.speed * (a.swing !== 'none' ? PLAYER.swingSlow : 1)
   let wantX = input.moveX * speedCap
   const wantZ = -input.moveY * speedCap
-  if (a.queued && incoming && sim.prediction) {
-    const f = forward(a)
-    const plane = a.z + f.z * PLAYER.contactAhead
-    const elapsed = sim.time - sim.predictionStart
-    const s = sim.prediction.samples.find((q) => q.t > elapsed && q.z >= plane)
-    if (s) {
-      const fh = s.x - 0.75
-      const bh = s.x + 0.75
-      const stand = Math.abs(fh - a.x) < Math.abs(bh - a.x) ? fh : bh
-      const dx = stand - a.x
-      if (Math.abs(dx) < 3.2) wantX += Math.max(-1, Math.min(1, dx * 2)) * PLAYER.speed * PLAYER.assist
-    }
+  if (a.queued && incoming && contact && a.swing === 'none') {
+    // Line up so the ball arrives a comfortable arm-and-racket length to the side.
+    const fh = contact.x - PLAYER.stance
+    const bh = contact.x + PLAYER.stanceBackhand
+    const stand = Math.abs(fh - a.x) < Math.abs(bh - a.x) ? fh : bh
+    const dx = stand - a.x
+    if (Math.abs(dx) < 3.2) wantX += Math.max(-1, Math.min(1, dx * 2)) * PLAYER.speed * PLAYER.assist
   }
   moveAthlete(a, wantX, wantZ, speedCap, dt)
   clampArea(a, HUMAN)
 
   if (!a.queued || !canHit) return
   const win = inContactWindow(a, p)
-  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, a.queued.shot, p.y + v.y * tt)
-  if (win.ok) {
+  // Start the swing so its contact key coincides with the ball reaching the hitting plane.
+  if (a.swing === 'none' && contact && contact.t - sim.time <= TIMING.swingLead)
+    startSwing(a, contact.lateral, a.queued.shot, contact.y, contact)
+  const due = a.swing !== 'none' ? sim.time >= a.contactAt - PHYSICS.timeStep / 2 : false
+  if (win.ok && (due || !contact)) {
     const grade = a.queued.grade ?? 'late'
     startSwing(a, win.lateral, a.queued.shot, p.y)
     useGame.getState().showTiming(grade)
+    snapBallToRacket(a)
     const spec = SHOTS[a.queued.shot]
     const tx = Math.max(-3.7, Math.min(3.7, input.moveX * 3.1))
     const depth = Math.max(4.8, Math.min(11.1, spec.depth + input.moveY * 1.7))
@@ -487,14 +565,16 @@ function updateAI(dt: number, p: V3, v: V3) {
       const second = sim.serveNumber === 2
       const shot: ShotType = second ? 'topspin' : Math.random() < 0.6 ? 'flat' : 'slice'
       tossBall(a, shot)
-    } else if (!sim.held && v.y < 0.2 && p.y > 2.3) {
+    } else if (a.pendingServe) {
+      updatePendingServe(AI)
+    } else if (!sim.held && v.y < 0.4 && p.y > SERVE.apex - 0.3) {
       const second = sim.serveNumber === 2
       // First serves are aimed close to the lines; second serves are safe.
       let grade = pickGrade(spec, second ? 0.4 : 0)
       if (second && grade !== 'perfect') grade = 'good'
       if (!second && Math.random() > spec.serveFirst && grade === 'good') grade = 'early'
       const aim = [-1, 0, 1][Math.floor(Math.random() * 3)]
-      hitServe(AI, a.swingShot, grade, aim)
+      releaseServe(AI, a.swingShot, grade, aim)
     }
     return
   }
@@ -544,10 +624,12 @@ function updateAI(dt: number, p: V3, v: V3) {
   clampArea(a, AI)
 
   if (!(sim.phase === 'rally' && incoming) || aiLetGo) return
-  const tt = timeToPlane(a, p, v)
+  const contact = predictContact(a)
   const win = inContactWindow(a, p)
-  if (tt <= TIMING.swingLead) startSwing(a, win.lateral, 'topspin', p.y + v.y * tt)
-  if (win.ok) {
+  if (a.swing === 'none' && contact && contact.t - sim.time <= TIMING.swingLead)
+    startSwing(a, contact.lateral, 'topspin', contact.y, contact)
+  const due = a.swing !== 'none' ? sim.time >= a.contactAt - PHYSICS.timeStep / 2 : false
+  if (win.ok && (due || !contact)) {
     const choice = chooseShot(a, p.y, win.lateral, spec, sim.hits)
     const grade = pickGrade(spec)
     // Pace and awkward height make errors more likely.
@@ -564,6 +646,7 @@ function updateAI(dt: number, p: V3, v: V3) {
     }
     a.swingShot = choice.shot
     startSwing(a, win.lateral, choice.shot, p.y)
+    snapBallToRacket(a)
     strike(AI, choice.shot, grade, choice.target, false, miss, win.lateral)
   }
 }

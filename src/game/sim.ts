@@ -28,6 +28,14 @@ export interface Athlete {
   split: number
   /** Ball height expected at contact, used to bend the swing. */
   contactY: number
+  /** Where the ball will be met (world), used to aim the racket arm; set when a swing starts. */
+  aim: { x: number; y: number; z: number } | null
+  /** Sim time of the planned contact. */
+  contactAt: number
+  /** Racket sweet spot (world), written by the renderer each frame. */
+  sweet: { x: number; y: number; z: number } | null
+  /** A released serve waiting for the racket to reach the ball. */
+  pendingServe: { shot: ShotType; grade: Grade; aimX: number } | null
 }
 
 export type RallyPhase = 'idle' | 'serve' | 'rally' | 'dead'
@@ -87,6 +95,10 @@ function makeAthlete(yaw: number): Athlete {
     celebrate: 0,
     split: 0,
     contactY: 1,
+    aim: null,
+    contactAt: 0,
+    sweet: null,
+    pendingServe: null,
   }
 }
 

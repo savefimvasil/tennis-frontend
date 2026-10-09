@@ -1,10 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { BALL, COURT } from '../game/constants'
 import { onFenceTouch } from '../game/director'
-import { clayTexture, courtRoughness, courtTexture, grassTexture, lawnTexture, radialTexture } from './textures'
+import { grassTexture, radialTexture } from './textures'
+import { surfaceMaps, surfaceMaterial } from './surfaceTextures'
 import { useGame } from '../game/store'
 
 const L = COURT.halfLength
@@ -37,34 +38,37 @@ function linesGeometry() {
   return mergeGeometries(geos)
 }
 
-/** Surface look per court type: playing area, run-off and how the material reads. */
+/** Surface look per court type: PBR materials for the playing area and the run-off. */
 function useSurfaceMaterials() {
   const surface = useGame((s) => s.surface)
-  return useMemo(() => {
-    const rough = courtRoughness()
-    if (surface === 'clay') {
-      const inner = clayTexture()
-      const outer = inner.clone()
-      outer.repeat.set(12, 22)
-      outer.needsUpdate = true
-      return { surface, inner, outer, innerRough: 0.97, outerRough: 0.97, outerTint: '#e9ded6', rough }
-    }
-    if (surface === 'grass') {
-      // 2 m stripes across the court, continuing into the run-off.
-      const inner = lawnTexture().clone()
-      inner.repeat.set(1, (L * 2) / 4)
-      inner.needsUpdate = true
-      const outer = lawnTexture().clone()
-      outer.repeat.set(1, (COURT.fenceZ * 2) / 4)
-      outer.needsUpdate = true
-      return { surface, inner, outer, innerRough: 0.9, outerRough: 0.92, outerTint: '#d9e6cf', rough }
-    }
-    const inner = courtTexture('#2c5d8f', 'court-blue')
-    const outer = courtTexture('#3d7656', 'court-green').clone()
-    outer.repeat.set(10, 18)
-    outer.needsUpdate = true
-    return { surface, inner, outer, innerRough: 0.82, outerRough: 0.9, outerTint: '#ffffff', rough }
+  const mats = useMemo(() => {
+    const innerKind = surface
+    const outerKind = surface === 'hard' ? 'hardOuter' : surface
+    const inner = surfaceMaterial(surfaceMaps(innerKind, L * 2), DW * 2, L * 2)
+    const outer = surfaceMaterial(surfaceMaps(outerKind, COURT.fenceZ * 2), COURT.fenceX * 2, COURT.fenceZ * 2)
+    // The run-off on clay and grass is the same surface, a touch lighter and more worn.
+    if (surface !== 'hard') outer.color.set(surface === 'clay' ? '#f1e2d8' : '#e2ecd6')
+    // Painted lines: matte, with the same grain showing through.
+    const lines = new THREE.MeshStandardMaterial({
+      color: '#f3f4ef',
+      roughness: 0.78,
+      normalMap: inner.normalMap,
+      normalScale: new THREE.Vector2(0.5, 0.5),
+      envMapIntensity: 0.35,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    })
+    return { surface, inner, outer, lines }
   }, [surface])
+  useEffect(
+    () => () => {
+      mats.inner.dispose()
+      mats.outer.dispose()
+      mats.lines.dispose()
+    },
+    [mats],
+  )
+  return mats
 }
 
 /** Worn patches where players stand most: behind the baseline centre and at the service line. */
@@ -117,17 +121,17 @@ export function Court() {
       {/* Run-off */}
       <mesh rotation-x={-Math.PI / 2} position-y={0} receiveShadow>
         <planeGeometry args={[COURT.fenceX * 2, COURT.fenceZ * 2]} />
-        <meshStandardMaterial map={m.outer} roughnessMap={m.rough} roughness={m.outerRough} color={m.outerTint} />
+        <primitive object={m.outer} attach="material" />
       </mesh>
       {/* Playing area */}
       <mesh rotation-x={-Math.PI / 2} position-y={0.001} receiveShadow>
         <planeGeometry args={[DW * 2, L * 2]} />
-        <meshStandardMaterial map={m.inner} roughnessMap={m.rough} roughness={m.innerRough} />
+        <primitive object={m.inner} attach="material" />
       </mesh>
       {m.surface === 'grass' ? <Wear color="#b49a6a" opacity={0.42} /> : null}
       {m.surface === 'clay' ? <Wear color="#8f3f1f" opacity={0.25} /> : null}
       <mesh geometry={lines} receiveShadow>
-        <meshStandardMaterial color="#f3f4ef" roughness={0.55} polygonOffset polygonOffsetFactor={-2} />
+        <primitive object={m.lines} attach="material" />
       </mesh>
 
       {/* Physics: the playing surface and the fence */}

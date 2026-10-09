@@ -4,7 +4,8 @@ import { PLAYER, SHOTS, type AiSpec, type Grade, type ShotType } from '../game/t
 import type { Flight } from '../physics/flight'
 
 // The AI defends -z and faces +z, so its right hand is toward -x.
-const STANCE = 0.8
+// Arm-and-racket length to the side of the ball at contact (shared with the player's assist).
+const STANCE = PLAYER.stance
 
 export function pickGrade(spec: AiSpec, boost = 0): Grade {
   const g = spec.grades
@@ -40,8 +41,9 @@ export function planIntercept(ai: Athlete, flight: Flight, elapsed: number, spec
     // Volleys are only allowed when already near the net.
     if (!afterBounce && (mustBounce || ai.z < -5)) continue
     if (s.y < PLAYER.minContactY + 0.15 || s.y > 2.2) continue
+    // The AI faces +z, so its forehand side is -x.
     const fh = s.x + STANCE
-    const bh = s.x - STANCE
+    const bh = s.x - PLAYER.stanceBackhand
     const sx = Math.abs(fh - ai.x) <= Math.abs(bh - ai.x) ? fh : bh
     const sz = s.z - PLAYER.contactAhead
     const dist = Math.hypot(sx - ai.x, sz - ai.z)
