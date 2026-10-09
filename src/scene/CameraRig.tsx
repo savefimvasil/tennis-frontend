@@ -32,6 +32,12 @@ export function CameraRig() {
       pos.set(a.x * 0.55 + bx * 0.08, 3.25, Math.min(a.z + 7.2, COURT.fenceZ - 0.6))
       look.set(a.x * 0.3 + bx * 0.12, 0.7, a.z - 12)
     }
+    // Dev-only: fixed camera for automated close-up screenshots.
+    const override = import.meta.env.DEV && (window as { __camOverride?: [number[], number[]] }).__camOverride
+    if (override) {
+      pos.fromArray(override[0])
+      look.fromArray(override[1])
+    }
     const k = 1 - Math.exp(-dt * (screen === 'playing' ? 4.5 : 1.2))
     // Dev-only hook so automated screenshots don't wait on camera easing.
     const snap = import.meta.env.DEV && (window as { __snapCamera?: boolean }).__snapCamera

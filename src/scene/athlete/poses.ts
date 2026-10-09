@@ -59,18 +59,20 @@ export const FOREHAND = keys([
       rSh: [0.35, 0, -1.2],
       rEl: [-0.55, 0, 0],
       rWr: [0, 0, 0.2],
-      lSh: [-1.25, 0, 0.35],
-      lEl: [-0.2, 0, 0],
+      // Left arm points at the incoming ball.
+      lSh: [-1.45, 0, 0.12],
+      lEl: [-0.15, 0, 0],
     },
   }],
   [0.2, {
     j: {
-      spine: [0.2, 0.1, 0],
-      rSh: [-0.2, 0, -1.35],
-      rEl: [-0.15, 0, 0],
+      spine: [0.2, 0.35, 0],
+      rSh: [-0.45, 0, -1.25],
+      rEl: [-0.35, 0, 0],
       rWr: [0, 0, 0.05],
-      lSh: [-0.7, 0, 0.75],
-      lEl: [-0.3, 0, 0],
+      // Left arm folds across the chest as the body rotates through.
+      lSh: [-1.15, 0, -0.35],
+      lEl: [-1.1, 0, 0],
     },
   }],
   [0.36, {

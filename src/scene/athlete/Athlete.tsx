@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
@@ -6,6 +6,7 @@ import { sim } from '../../game/sim'
 import type { Side } from '../../game/constants'
 import { BACKHAND, FOREHAND, JOINTS, READY, SERVE_KEYS, copyPose, makePose, sampleTrack, type Joint, type Pose } from './poses'
 import { Racket } from './Racket'
+import { ROCKETBOX_DIMS, RocketboxBody, type RocketboxHandle, type RocketboxSpec } from './Rocketbox'
 
 export interface Kit {
   shirt: string
@@ -106,15 +107,17 @@ function Arm({
   sh,
   el,
   children,
+  dims,
 }: {
   m: Mats
   side: 1 | -1
   sh: React.Ref<THREE.Group>
   el: React.Ref<THREE.Group>
   children?: React.ReactNode
+  dims: Dims
 }) {
   return (
-    <group ref={sh} position={[side * 0.2, 0.43, 0]}>
+    <group ref={sh} position={[side * dims.shoulderX, dims.shoulderY, 0]}>
       <Joint r={0.068} mat={m.shirt} />
       {/* Sleeve */}
       <mesh position-y={-0.07} material={m.shirt} castShadow>
@@ -135,12 +138,28 @@ function Arm({
   )
 }
 
+interface Dims {
+  pelvisY: number
+  spineY: number
+  shoulderY: number
+  shoulderX: number
+}
+
+const PRIMITIVE_DIMS: Dims = { pelvisY: 0.95, spineY: 0.06, shoulderY: 0.43, shoulderX: 0.2 }
+
 const tmpTrack = makePose()
 const tmpRun = makePose()
 
 /** A stylised athlete with procedural animation driven by the simulation state. */
-export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
+export function Athlete({ side, kit, model }: { side: Side; kit: Kit; model?: RocketboxSpec }) {
   const m = useMaterials(kit)
+  // With a skinned model the primitive body becomes an invisible driver rig (racket stays visible).
+  const dims = model ? ROCKETBOX_DIMS : PRIMITIVE_DIMS
+  useEffect(() => {
+    for (const mat of Object.values(m)) mat.visible = !model
+  }, [m, model])
+  const body = useRef<RocketboxHandle>(null)
+  const jointMap = useRef<Record<Joint | 'pelvis', THREE.Object3D> | null>(null)
   const root = useRef<THREE.Group>(null!)
   const pelvis = useRef<THREE.Group>(null!)
   const refs = {
@@ -266,8 +285,12 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
       refs[j].current.rotation.set(cur[0], cur[1], cur[2])
     }
     pose.lift += (target.lift - pose.lift) * k
-    pelvis.current.position.y = 0.95 + pose.lift
+    pelvis.current.position.y = dims.pelvisY + pose.lift
     pelvis.current.rotation.y = s.hipYaw
+    if (body.current) {
+      jointMap.current ??= { ...jointObjects(refs), pelvis: pelvis.current }
+      body.current.drive(jointMap.current, pose.lift)
+    }
   })
 
   const headwear =
@@ -288,14 +311,19 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
 
   return (
     <group ref={root}>
-      <group ref={pelvis} position-y={0.95}>
+      {model ? (
+        <Suspense fallback={null}>
+          <RocketboxBody spec={model} handle={body} />
+        </Suspense>
+      ) : null}
+      <group ref={pelvis} position-y={dims.pelvisY}>
         {/* Hips */}
         <mesh material={m.shorts} castShadow scale={[1.3, 1, 0.9]}>
           <capsuleGeometry args={[0.12, 0.08, 6, 14]} />
         </mesh>
         <Leg m={m} side={1} hip={refs.lHip} knee={refs.lKnee} />
         <Leg m={m} side={-1} hip={refs.rHip} knee={refs.rKnee} />
-        <group ref={refs.spine} position-y={0.06}>
+        <group ref={refs.spine} position-y={dims.spineY}>
           {/* Torso */}
           <mesh position-y={0.24} material={m.shirt} castShadow scale={[1.18, 1, 0.74]}>
             <capsuleGeometry args={[0.16, 0.26, 8, 18]} />
@@ -328,8 +356,8 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
               {headwear}
             </group>
           </group>
-          <Arm m={m} side={1} sh={refs.lSh} el={refs.lEl} />
-          <Arm m={m} side={-1} sh={refs.rSh} el={refs.rEl}>
+          <Arm m={m} side={1} sh={refs.lSh} el={refs.lEl} dims={dims} />
+          <Arm m={m} side={-1} sh={refs.rSh} el={refs.rEl} dims={dims}>
             <group ref={refs.rWr}>
               <Racket frame={kit.frame} />
             </group>
@@ -338,4 +366,10 @@ export function Athlete({ side, kit }: { side: Side; kit: Kit }) {
       </group>
     </group>
   )
+}
+
+function jointObjects(refs: Record<Joint, React.RefObject<THREE.Group>>) {
+  const out = {} as Record<Joint, THREE.Object3D>
+  for (const k of JOINTS) out[k] = refs[k].current
+  return out
 }

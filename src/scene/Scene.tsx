@@ -6,6 +6,7 @@ import { PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
 import { useGame } from '../game/store'
 import { Athlete, KITS } from './athlete/Athlete'
+import { ROCKETBOX } from './athlete/Rocketbox'
 import { Ball } from './Ball'
 import { CameraRig } from './CameraRig'
 import { Court } from './Court'
@@ -59,8 +60,8 @@ export function Scene() {
           <Ball />
         </Physics>
       </Suspense>
-      <Athlete side={0} kit={KITS.home} />
-      <Athlete side={1} kit={KITS.away} />
+      <Athlete side={0} kit={KITS.home} model={ROCKETBOX.home} />
+      <Athlete side={1} kit={KITS.away} model={ROCKETBOX.away} />
       <Surroundings detail={quality} />
       <Fx />
       <CameraRig />
