@@ -1,0 +1,90 @@
+import type { RapierRigidBody } from '@react-three/rapier'
+import type { Side } from './constants'
+import type { Grade, ShotType } from './tuning'
+
+// Mutable per-frame simulation state. Kept outside React so the 120 Hz game loop
+// never triggers re-renders; components read it inside useFrame.
+
+export type SwingKind = 'forehand' | 'backhand' | 'serve' | 'none'
+
+export interface Athlete {
+  x: number
+  z: number
+  vx: number
+  vz: number
+  /** Facing yaw: the human looks toward -z (PI), the AI toward +z (0). */
+  yaw: number
+  swing: SwingKind
+  swingT: number
+  swingShot: ShotType
+  /** Serve: ball tossed and awaiting the hit. */
+  tossing: boolean
+  /** Queued shot from the input (human) or plan (AI). */
+  queued: { shot: ShotType; grade: Grade | null; pressedAt: number } | null
+  /** Movement target for the AI. */
+  target: { x: number; z: number } | null
+  celebrate: number
+}
+
+export type RallyPhase = 'idle' | 'serve' | 'rally' | 'dead'
+
+export interface BallEvent {
+  id: number
+  kind: 'hit' | 'bounce' | 'net' | 'fence'
+  x: number
+  y: number
+  z: number
+  power: number
+}
+
+export const sim = {
+  ball: null as RapierRigidBody | null,
+  time: 0,
+  phase: 'idle' as RallyPhase,
+  server: 0 as Side,
+  serveNumber: 1 as 1 | 2,
+  deuceCourt: true,
+  /** The server is holding the ball (pre-toss). */
+  held: true,
+  lastHitter: null as Side | null,
+  hits: 0,
+  /** Bounces since the last hit. */
+  bounces: 0,
+  firstBounce: null as { x: number; z: number } | null,
+  netTouched: false,
+  receiverTouched: false,
+  deadTimer: 0,
+  prevVy: 0,
+  prevZ: 0,
+  landing: null as { x: number; z: number; t: number } | null,
+  /** Predicted flight of the current shot for AI and assists. */
+  prediction: null as import('../physics/flight').Flight | null,
+  predictionStart: 0,
+  shake: 0,
+  events: [] as BallEvent[],
+  athletes: [makeAthlete(Math.PI), makeAthlete(0)] as [Athlete, Athlete],
+}
+
+function makeAthlete(yaw: number): Athlete {
+  return {
+    x: 0,
+    z: 0,
+    vx: 0,
+    vz: 0,
+    yaw,
+    swing: 'none',
+    swingT: 0,
+    swingShot: 'topspin',
+    tossing: false,
+    queued: null,
+    target: null,
+    celebrate: 0,
+  }
+}
+
+let eventSeq = 1
+
+export function pushEvent(e: Omit<BallEvent, 'id'>) {
+  sim.events.push({ ...e, id: eventSeq++ })
+  if (sim.events.length > 32) sim.events.shift()
+}
