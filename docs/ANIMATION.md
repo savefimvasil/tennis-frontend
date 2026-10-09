@@ -15,12 +15,16 @@ animated from the same replicated fields as the local one. Pure helpers live in 
    (`strideLength`), so slow steps are short and quick instead of slow-motion strides.
 2. **Lean.** A smoothed acceleration leans the trunk forward when speeding up, back when
    braking and into lateral changes of direction; hard braking also sits into the legs.
-3. **Split step and receiving bounce** before the serve.
+3. **Split step**, and the **receiving stance** before the serve: low and wide, weight forward,
+   racket out in front on both hands, swaying and bouncing on the toes (`RECEIVE` in `poses.ts`).
 4. **Early preparation.** As soon as the opponent's shot is predicted, the shoulders turn and
    the racket goes back on the side the ball will be met (`predictedLateral`, the director's
    own forehand/backhand rule). When the swing starts, `preparedSwingTime` joins the stroke
    track from that take-back instead of snapping back to the ready stance.
-5. **Strokes.** The keyframe tracks are sampled with a monotone cubic spline
+5. **Strokes.** The backhand is two-handed: the take-back goes by the left hip in front of
+   the body, contact is made with both arms long, and the finish ends with the hands by the right
+   shoulder, so the free hand never has to reach through the body or behind the head.
+    The keyframe tracks are sampled with a monotone cubic spline
    (`monotoneCubic`): the racket keeps moving through contact and only stops at real turning
    points, without overshooting a key. The hips lead the shoulders (part of the trunk turn
    comes from the pelvis), the legs load in the take-back and drive up through contact.

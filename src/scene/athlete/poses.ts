@@ -114,18 +114,21 @@ export const FOREHAND = keys([
   [0.72, {}],
 ])
 
+// Two-handed backhand: both hands stay on the grip. The racket goes back by the left hip in
+// front of the body (not across it), is met with both arms long out in front, and finishes
+// with the hands by the right shoulder.
 export const BACKHAND = keys([
   [0, {}],
   [
     0.12,
     {
       j: {
-        spine: [0.22, 1.2, 0],
-        rSh: [0.1, 1.0, 0.55],
-        rEl: [-0.7, 0, 0],
-        rWr: [0, 0, -0.3],
-        lSh: [0.25, 0, 0.85],
-        lEl: [-0.6, 0, 0],
+        spine: [0.26, 1.2, 0],
+        rSh: [-0.6, 0.55, 0.62],
+        rEl: [-0.55, 0, 0],
+        rWr: [0.25, 0, -0.55],
+        lSh: [-0.55, 0, 0.12],
+        lEl: [-1.0, 0, 0],
       },
     },
   ],
@@ -133,11 +136,11 @@ export const BACKHAND = keys([
     0.2,
     {
       j: {
-        spine: [0.2, -0.15, 0],
-        rSh: [-0.6, 1.4, 0.6],
-        rEl: [-0.3, 0, 0],
-        rWr: [0, 0, -0.1],
-        lSh: [-0.55, 0, 0.95],
+        spine: [0.2, 0.05, 0],
+        rSh: [-0.95, 0.85, 0.32],
+        rEl: [-0.25, 0, 0],
+        rWr: [-0.55, 0, -0.1],
+        lSh: [-0.95, 0, -0.25],
         lEl: [-0.45, 0, 0],
       },
     },
@@ -146,17 +149,37 @@ export const BACKHAND = keys([
     0.36,
     {
       j: {
-        spine: [0.15, -1.1, 0],
-        rSh: [-2.2, 1.0, 0.3],
-        rEl: [-1.4, 0, 0],
-        rWr: [0.2, 0, -0.4],
-        lSh: [-2.0, 0, 0.2],
-        lEl: [-1.4, 0, 0],
+        spine: [0.14, -0.95, 0],
+        rSh: [-1.3, 0.45, 0.05],
+        rEl: [-1.85, 0, 0],
+        rWr: [0.35, 0, -0.3],
+        lSh: [-1.2, 0, -0.6],
+        lEl: [-1.7, 0, 0],
       },
     },
   ],
   [0.72, {}],
 ])
+
+/** Receiving the serve: low and wide, weight forward, racket out in front on both hands. */
+export const RECEIVE: Pose = makePose(
+  mergeReady({
+    j: {
+      spine: [0.55, 0, 0],
+      neck: [-0.48, 0, 0],
+      rSh: [-0.85, 0.2, 0.18],
+      rEl: [-1.3, 0, 0],
+      rWr: [0.35, 0, 1.05],
+      lSh: [-0.8, -0.1, 0.22],
+      lEl: [-1.3, 0, 0],
+      lHip: [-0.78, 0, 0.27],
+      rHip: [-0.78, 0, -0.27],
+      lKnee: [1.3, 0, 0],
+      rKnee: [1.3, 0, 0],
+    },
+    lift: -0.25,
+  }),
+)
 
 // Serve: trophy position by 0.5 s and held until the hit, which jumps time to 1.0.
 export const SERVE_KEYS = keys([

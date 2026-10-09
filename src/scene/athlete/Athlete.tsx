@@ -9,6 +9,7 @@ import {
   FOREHAND,
   JOINTS,
   READY,
+  RECEIVE,
   SERVE_KEYS,
   copyPose,
   makePose,
@@ -314,6 +315,8 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
     lastHits: -1,
     hitAt: 0,
     look: [0, 0] as [number, number],
+    /** Weight of the serve-receiving stance. */
+    receive: 0,
   })
 
   useFrame((clock, dtRaw) => {
@@ -400,9 +403,20 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       target.j.rKnee[0] += 0.25 * (1 - hop)
     }
 
-    // Receiver waiting for the serve: light bounce on the toes.
-    if (sim.phase === 'serve' && sim.server !== side && sim.lastHitter === null && speed < 0.5) {
-      target.lift += Math.max(0, Math.sin(time * 6.5 + side)) * 0.018
+    // Receiving the serve: low wide stance, weight on the toes, swaying side to side.
+    const receiving = sim.phase === 'serve' && sim.server !== side && sim.lastHitter === null
+    s.receive += ((receiving ? 1 : 0) * (1 - Math.min(1, speed / 1.5)) - s.receive) * approach(5, dt)
+    if (s.receive > 0.01) {
+      const w = s.receive
+      for (const k of JOINTS) {
+        for (let i = 0; i < 3; i++) target.j[k][i] += (RECEIVE.j[k][i] - READY.j[k][i]) * w
+      }
+      target.lift += (RECEIVE.lift - READY.lift) * w
+      const sway = Math.sin(time * 2.3 + side * 1.7)
+      target.j.spine[2] += sway * 0.05 * w
+      target.j.lHip[2] += sway * 0.04 * w
+      target.j.rHip[2] += sway * 0.04 * w
+      target.lift += Math.max(0, Math.sin(time * 6.5 + side)) * 0.016 * w
     }
 
     // ---- Early preparation: turn the shoulders and take the racket back as soon as the
