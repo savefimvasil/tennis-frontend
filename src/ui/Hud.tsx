@@ -131,11 +131,11 @@ function LiveReadouts() {
 function Controls() {
   return (
     <div className="controls" aria-label="Controls">
-      <span><kbd>WASD</kbd> move / aim</span>
-      <span><kbd>J</kbd> topspin</span>
-      <span><kbd>K</kbd> slice</span>
-      <span><kbd>L</kbd> lob</span>
-      <span><kbd>I</kbd> flat</span>
+      <span><kbd>←↑↓→</kbd> move / aim</span>
+      <span><kbd>Q</kbd> topspin</span>
+      <span><kbd>W</kbd> flat</span>
+      <span><kbd>E</kbd> slice</span>
+      <span><kbd>R</kbd> lob</span>
       <span><kbd>Esc</kbd> pause</span>
     </div>
   )

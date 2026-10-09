@@ -15,10 +15,11 @@ export interface InputState {
 }
 
 const KEY_SHOTS: Record<string, ShotType> = {
-  KeyJ: 'topspin',
-  KeyK: 'slice',
-  KeyL: 'lob',
-  KeyI: 'flat',
+  // Left hand on the shot row, right hand on the arrow keys.
+  KeyQ: 'topspin',
+  KeyW: 'flat',
+  KeyE: 'slice',
+  KeyR: 'lob',
   Space: 'topspin',
 }
 
@@ -45,6 +46,7 @@ function onKeyDown(e: KeyboardEvent) {
     pressedQ.push(shot)
     e.preventDefault()
   }
+  if (e.code.startsWith('Arrow')) e.preventDefault()
   if (e.code === 'Escape' || e.code === 'KeyP') pauseQ = true
 }
 
@@ -78,8 +80,8 @@ function dead(v: number) {
 
 /** Poll once per physics step. moveX: +1 right, moveY: +1 forward (toward the net). */
 export function pollInput(): InputState {
-  let mx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0)
-  let my = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0)
+  let mx = (keys.has('ArrowRight') ? 1 : 0) - (keys.has('ArrowLeft') ? 1 : 0)
+  let my = (keys.has('ArrowUp') ? 1 : 0) - (keys.has('ArrowDown') ? 1 : 0)
 
   const pads = typeof navigator !== 'undefined' && navigator.getGamepads ? navigator.getGamepads() : []
   const pad = pads && Array.from(pads).find((p) => p && p.connected)

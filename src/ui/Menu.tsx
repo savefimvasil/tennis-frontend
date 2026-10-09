@@ -79,10 +79,13 @@ export function MainMenu() {
         </button>
         <div className="howto">
           <div>
-            <b>Serve</b> Hold a shot key to toss, release when the meter is in the zone. <kbd>A</kbd>/<kbd>D</kbd> aims.
+            <b>Shots</b> <kbd>Q</kbd> topspin, <kbd>W</kbd> flat, <kbd>E</kbd> slice, <kbd>R</kbd> lob. Arrow keys move and aim.
           </div>
           <div>
-            <b>Rally</b> Press a shot key as the ball comes in. Hold a direction to aim; <kbd>W</kbd> hits deeper, <kbd>S</kbd> shorter.
+            <b>Serve</b> Hold a shot key to toss, release when the meter is in the zone. <kbd>←</kbd>/<kbd>→</kbd> aims.
+          </div>
+          <div>
+            <b>Rally</b> Press a shot key as the ball comes in. Hold an arrow to aim; <kbd>↑</kbd> hits deeper, <kbd>↓</kbd> shorter.
           </div>
           <div>
             <b>Gamepad</b> Left stick moves, A topspin, B slice, Y lob, X flat.
