@@ -907,6 +907,9 @@ interface Online extends OnlineLink {
 let online: Online | null = null
 
 /** Switches the director to an online match (or back to single player with null). */
+/** How far the simulation clock may stray from the synced server clock before re-anchoring. */
+const ANCHOR_SLACK_MS = 150
+
 export function setOnline(link: OnlineLink | null) {
   if (!link) {
     online = null
@@ -918,7 +921,18 @@ export function setOnline(link: OnlineLink | null) {
     wall: link.now,
     // Stamped from the simulation, so a contact carries the time the ball was really there
     // even when several physics steps run in one rendered frame.
-    now: () => online!.anchor.server + (sim.time - online!.anchor.sim) * 1000,
+    now: () => {
+      // Kept within reach of the synced clock: a slow frame, a hidden tab or a machine that
+      // cannot keep up puts the simulation behind (or a burst of catch-up steps ahead).
+      const o = online!
+      const t = o.anchor.server + (sim.time - o.anchor.sim) * 1000
+      const w = o.wall()
+      // Not between my toss and its contact: the toss flies on the local simulation, so its
+      // contact time must count from the toss on the same clock.
+      if (Math.abs(t - w) <= ANCHOR_SLACK_MS || (o.toss && sim.hits === 0)) return t
+      o.anchor = { sim: sim.time, server: w }
+      return w
+    },
     anchor: { sim: sim.time, server: link.now() },
     rallyId: 0,
     seed: 0,
@@ -1110,9 +1124,6 @@ export function onlineRemoteState(st: AthleteState) {
 /** Moves the opponent along their reported path, ~100 ms behind, and sends my own state. */
 function updateRemote(dt: number) {
   if (!online) return
-  // A long stall (hidden tab, a frame over the physics catch-up limit) puts the sim behind
-  // the server; re-anchor rather than stamp events in the past.
-  if (Math.abs(online.now() - online.wall()) > 250) online.anchor = { sim: sim.time, server: online.wall() }
   const a = sim.athletes[AI]
   updateSwing(a, dt)
   const r = online.remote

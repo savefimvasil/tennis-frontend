@@ -9,7 +9,8 @@ import { PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
 import { useGame } from '../game/store'
 import { Athlete, KITS } from './athlete/Athlete'
-import { opponentSkin, skinById } from './athlete/skins'
+import { opponentSkin, seatSkins, skinById } from './athlete/skins'
+import { useNet } from '../net/net'
 import { Ball } from './Ball'
 import { CameraRig } from './CameraRig'
 import { Court } from './Court'
@@ -27,6 +28,31 @@ function SlowStepper({ scale }: { scale: number }) {
   const { step } = useRapier()
   useFrame((_, dt) => step(dt * scale))
   return null
+}
+
+/** The near player is always this client. Online, each player keeps the outfit they chose. */
+function Players({ skin }: { skin: string }) {
+  const online = useGame((s) => s.mode === 'online')
+  const seat = useNet((s) => s.seat)
+  const kit0 = useNet((s) => s.room?.seats[0]?.kit)
+  const kit1 = useNet((s) => s.room?.seats[1]?.kit)
+  if (online && seat !== null) {
+    const skins = seatSkins([kit0, kit1])
+    const kits = [KITS.home, KITS.away]
+    const opp = seat === 0 ? 1 : 0
+    return (
+      <>
+        <Athlete side={0} kit={kits[seat]} skin={skins[seat]} />
+        <Athlete side={1} kit={kits[opp]} skin={skins[opp]} />
+      </>
+    )
+  }
+  return (
+    <>
+      <Athlete side={0} kit={KITS.home} skin={skinById(skin)} />
+      <Athlete side={1} kit={KITS.away} skin={opponentSkin(skin)} />
+    </>
+  )
 }
 
 function GameLoop() {
@@ -122,8 +148,7 @@ export function Scene() {
           <Ball />
         </Physics>
       </Suspense>
-      <Athlete side={0} kit={KITS.home} skin={skinById(skin)} />
-      <Athlete side={1} kit={KITS.away} skin={opponentSkin(skin)} />
+      <Players skin={skin} />
       <Surroundings detail={quality} />
       <Fx />
       <CameraRig />

@@ -58,6 +58,8 @@ export type RoomStatus = 'lobby' | 'playing' | 'paused' | 'finished'
 
 export interface SeatInfo {
   name: string
+  /** The player's outfit id (the frontend's skins), so both screens dress them the same. */
+  kit: string | null
   connected: boolean
   ready: boolean
   /** Last measured round trip (ms), or null before the first measurement. */
@@ -256,13 +258,17 @@ export interface ClientToServerEvents {
   'room:create': (
     req: {
       name: string
+      kit?: string
       settings?: Partial<RoomSettings>
       isPublic?: boolean
       protocol?: number
     },
     ack: (res: Ack<SeatGrant>) => void,
   ) => void
-  'room:join': (req: { code: string; name: string; protocol?: number }, ack: (res: Ack<SeatGrant>) => void) => void
+  'room:join': (
+    req: { code: string; name: string; kit?: string; protocol?: number },
+    ack: (res: Ack<SeatGrant>) => void,
+  ) => void
   /** Open public games anyone can join with room:join. */
   'room:list': (req: object, ack: (res: Ack<{ rooms: OpenRoom[] }>) => void) => void
   /** Subscribe to (or stop) live `lobby:rooms` pushes while a browse screen is open. */
@@ -271,7 +277,7 @@ export interface ClientToServerEvents {
   'room:resume': (req: { token: string }, ack: (res: Ack<SeatGrant>) => void) => void
   'room:leave': (req: object, ack: (res: Ack) => void) => void
   'match:quick': (
-    req: { name: string; protocol?: number },
+    req: { name: string; kit?: string; protocol?: number },
     ack: (res: Ack<{ status: 'queued' } | ({ status: 'matched' } & SeatGrant)>) => void,
   ) => void
   'match:cancel': (req: object, ack: (res: Ack) => void) => void

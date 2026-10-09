@@ -47,6 +47,16 @@ export function skinById(id: string): Skin {
   return SKINS.find((s) => s.id === id) ?? SKINS[0]
 }
 
+/**
+ * Outfits for an online match, by seat. Each player wears their own choice; when both picked
+ * the same one, seat 1 changes. Both screens compute the same pair.
+ */
+export function seatSkins(kits: [string | null | undefined, string | null | undefined]): [Skin, Skin] {
+  const first = skinById(kits[0] ?? SKINS[0].id)
+  const second = skinById(kits[1] ?? SKINS[0].id)
+  return [first, second.id === first.id ? opponentSkin(first.id) : second]
+}
+
 /** The opponent wears something that contrasts with the player's choice. */
 export function opponentSkin(playerId: string): Skin {
   return skinById(playerId === 'coral' ? 'navy' : 'coral')

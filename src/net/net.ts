@@ -5,6 +5,7 @@ import {
   PROTOCOL_VERSION,
   type ClientToServerEvents,
   type OpenRoom,
+  type PointStart,
   type RallyResult,
   type RoomSettings,
   type RoomSnapshot,
@@ -21,6 +22,7 @@ import {
   onlineStrike,
   onlineStrikeRefused,
   onlineToss,
+  isOnline,
   setOnline,
 } from '../game/director'
 import { sim } from '../game/sim'
@@ -172,13 +174,15 @@ function connect(url: string) {
   s.on('room:state', (room) => useNet.setState({ room }))
   s.on('lobby:rooms', (openRooms) => useNet.setState({ openRooms }))
   s.on('match:found', (grant) => takeSeat(grant))
-  s.on('match:start', ({ room }) => beginMatch(room))
+  s.on('match:start', ({ room }) => {
+    lastStart = null
+    beginMatch(room)
+  })
   s.on('point:start', (ps) => {
-    const g = useGame.getState()
-    const seat = useNet.getState().seat
-    if (seat === null || g.mode !== 'online') return
-    useGame.setState({ match: matchToLocal(seat, ps.match), serveNumber: ps.serveNumber })
-    onlinePointStart(ps)
+    // Kept until the match is set up: after a reconnect the server restarts the point
+    // before the seat comes back.
+    lastStart = ps
+    applyStart()
   })
   s.on('point:result', (r) => pointResult(r))
   s.on('match:over', (m) => {
@@ -234,6 +238,17 @@ function link() {
   })
 }
 
+/** The latest point:start, applied once this client is in the match. */
+let lastStart: PointStart | null = null
+
+function applyStart() {
+  const ps = lastStart
+  const seat = useNet.getState().seat
+  if (!ps || seat === null || useGame.getState().mode !== 'online' || !isOnline()) return
+  useGame.setState({ match: matchToLocal(seat, ps.match), serveNumber: ps.serveNumber })
+  onlinePointStart(ps)
+}
+
 function beginMatch(room: RoomSnapshot) {
   const { seat } = useNet.getState()
   if (seat === null || !room.match) return
@@ -247,6 +262,7 @@ function beginMatch(room: RoomSnapshot) {
     match: matchToLocal(seat, room.match),
   })
   useNet.setState({ room, queued: false })
+  applyStart()
 }
 
 const REASON: Record<string, { title: string; kind: 'winner' | 'ace' | 'error' | 'double' | null }> = {
@@ -290,6 +306,7 @@ function saveSeat(token: string | null) {
 }
 
 function forgetSeat() {
+  lastStart = null
   saveSeat(null)
   useNet.setState({ seat: null, room: null })
   setOnline(null)
@@ -332,7 +349,13 @@ export async function createRoom(isPublic: boolean) {
   const settings: RoomSettings = { format: g.format, surface: g.surface, pace: g.pace }
   const res = await socket
     .timeout(3000)
-    .emitWithAck('room:create', { name: playerName(), settings, isPublic, protocol: PROTOCOL_VERSION })
+    .emitWithAck('room:create', {
+      name: playerName(),
+      kit: useGame.getState().skin,
+      settings,
+      isPublic,
+      protocol: PROTOCOL_VERSION,
+    })
     .catch(() => null)
   if (res?.ok) takeSeat(res)
   else fail(res)
@@ -342,7 +365,7 @@ export async function joinRoom(code: string) {
   if (!socket) return
   const res = await socket
     .timeout(3000)
-    .emitWithAck('room:join', { code, name: playerName(), protocol: PROTOCOL_VERSION })
+    .emitWithAck('room:join', { code, name: playerName(), kit: useGame.getState().skin, protocol: PROTOCOL_VERSION })
     .catch(() => null)
   if (res?.ok) takeSeat(res)
   else fail(res)
@@ -352,7 +375,7 @@ export async function quickMatch() {
   if (!socket) return
   const res = await socket
     .timeout(3000)
-    .emitWithAck('match:quick', { name: playerName(), protocol: PROTOCOL_VERSION })
+    .emitWithAck('match:quick', { name: playerName(), kit: useGame.getState().skin, protocol: PROTOCOL_VERSION })
     .catch(() => null)
   if (!res?.ok) return fail(res)
   if (res.status === 'queued') useNet.setState({ queued: true, error: null })
