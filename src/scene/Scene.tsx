@@ -1,8 +1,10 @@
-import { Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Canvas } from '@react-three/fiber'
 import { Preload } from '@react-three/drei'
-import { Physics, useBeforePhysicsStep } from '@react-three/rapier'
+import { Physics, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
+import { useFrame } from '@react-three/fiber'
+import { LAB_ENABLED, useLab } from '../lab/lab'
 import { PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
 import { useGame } from '../game/store'
@@ -16,6 +18,16 @@ import { Fx } from './Fx'
 import { Lighting } from './Lighting'
 import { Net } from './Net'
 import { Surroundings } from './Surroundings'
+
+// Physics Lab overlays (?lab): loaded only when the lab is open.
+const LabScene = LAB_ENABLED ? lazy(() => import('../lab/LabScene')) : null
+
+/** Slow motion for the lab: Physics is paused and stepped here with scaled time. */
+function SlowStepper({ scale }: { scale: number }) {
+  const { step } = useRapier()
+  useFrame((_, dt) => step(dt * scale))
+  return null
+}
 
 function GameLoop() {
   useBeforePhysicsStep(() => stepGame(PHYSICS.timeStep))
@@ -69,6 +81,9 @@ export function Scene() {
   // monitor did) reallocates every render target and recompiles shaders: that was the freezing.
   const dpr = Math.min(window.devicePixelRatio || 1, preset.dprMax)
   const shadowSize = preset.shadow
+  const timeScale = useLab((s) => (LAB_ENABLED ? s.timeScale : 1))
+  const colliders = useLab((s) => LAB_ENABLED && s.colliders)
+  const slow = screen === 'playing' && timeScale < 1
 
   return (
     <Canvas
@@ -91,9 +106,11 @@ export function Scene() {
         <Physics
           gravity={[0, PHYSICS.gravity, 0]}
           timeStep={PHYSICS.timeStep}
-          paused={screen !== 'playing'}
+          paused={screen !== 'playing' || slow}
           interpolate={false}
+          debug={colliders}
         >
+          {slow ? <SlowStepper scale={timeScale} /> : null}
           <GameLoop />
           <Court />
           <Net />
@@ -106,6 +123,11 @@ export function Scene() {
       <Fx />
       <CameraRig />
       <Effects quality={quality} />
+      {LabScene ? (
+        <Suspense fallback={null}>
+          <LabScene />
+        </Suspense>
+      ) : null}
       {/* Compile every shader up front so nothing compiles mid-rally. */}
       <Preload all />
     </Canvas>

@@ -12,8 +12,9 @@ export interface ShotSpec {
 }
 
 export const SHOTS: Record<ShotType, ShotSpec> = {
-  topspin: { speed: 29, spin: 270, netClearance: 0.55, depth: 9.2 },
-  slice: { speed: 24, spin: -150, netClearance: 0.22, depth: 8.6 },
+  // Pro forehands: ~30 m/s, ~2500 rpm, crossing the net 0.9-1.5 m above the tape.
+  topspin: { speed: 30, spin: 230, netClearance: 0.4, depth: 9.2 },
+  slice: { speed: 26, spin: -150, netClearance: 0.22, depth: 8.6 },
   lob: { speed: 0, spin: 110, netClearance: 2.2, depth: 9.8, lobPitch: 0.9 },
   flat: { speed: 36, spin: 70, netClearance: 0.18, depth: 9.6 },
 }
@@ -35,8 +36,12 @@ export const RACKET_EA = 0.4
 export const RALLY_BALL_SPEED = 22
 
 export type PaceId = 'club' | 'tour'
-/** Swing speed multiplier. Club pace is closer to GTA: slower, loopier rallies. */
-export const PACE: Record<PaceId, number> = { club: 0.78, tour: 1 }
+/**
+ * Swing speed multiplier, applied to both ball speed and spin (both scale with racket-head speed).
+ * Club pace is closer to GTA: slower rallies. Below ~0.85 a groundstroke has to be lofted
+ * well above 2.5 m to reach a deep target, which looks like a moonball.
+ */
+export const PACE: Record<PaceId, number> = { club: 0.88, tour: 1 }
 
 export type Grade = 'perfect' | 'good' | 'early' | 'late'
 
@@ -73,8 +78,6 @@ export const PLAYER = {
   contactBehind: 0.45,
   minContactY: 0.12,
   maxContactY: 2.75,
-  /** How strongly a queued swing pulls the player toward the ball. */
-  assist: 0.65,
 }
 
 export const SERVE = {
@@ -104,18 +107,41 @@ export interface AiSpec {
   serveFirst: number
   /** Base chance of an unforced error per shot; rises against fast, deep balls. */
   unforced: number
+  /** Chance of aiming through the middle instead of away from the player. */
+  centre: number
+}
+
+/** Help the human player gets at each difficulty. */
+export interface PlayerHelp {
+  /** Pull toward the stance spot once a shot key is pressed (share of top speed). */
+  assist: number
+  /** Pull toward the stance spot before any key is pressed (GTA-style auto-positioning). */
+  track: number
+  /** Widens the timing windows around the ideal press time. */
+  timing: number
+  /** Max sideways distance to the ball at contact. */
+  reach: number
+  /** Scales the landing scatter of the player's shots. */
+  error: number
+}
+
+export const PLAYER_HELP: Record<Difficulty, PlayerHelp> = {
+  easy: { assist: 1, track: 0.55, timing: 1.6, reach: 1.9, error: 0.6 },
+  pro: { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 },
+  ace: { assist: 0.6, track: 0, timing: 1, reach: 1.55, error: 1 },
 }
 
 export const AI_LEVELS: Record<Difficulty, AiSpec> = {
   easy: {
-    speed: 4.3,
-    reaction: 0.45,
-    pace: 0.85,
-    grades: { perfect: 0.05, good: 0.45, early: 0.25, late: 0.25 },
-    readsOut: 0.2,
-    aimMargin: 1.9,
-    serveFirst: 0.5,
-    unforced: 0.11,
+    speed: 3.8,
+    reaction: 0.55,
+    pace: 0.78,
+    grades: { perfect: 0.03, good: 0.37, early: 0.3, late: 0.3 },
+    readsOut: 0.1,
+    aimMargin: 2.5,
+    serveFirst: 0.4,
+    unforced: 0.16,
+    centre: 0.6,
   },
   pro: {
     speed: 5.6,
@@ -126,6 +152,7 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     aimMargin: 1.3,
     serveFirst: 0.68,
     unforced: 0.05,
+    centre: 0.28,
   },
   ace: {
     speed: 6.6,
@@ -136,5 +163,6 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     aimMargin: 0.8,
     serveFirst: 0.8,
     unforced: 0.015,
+    centre: 0.15,
   },
 }

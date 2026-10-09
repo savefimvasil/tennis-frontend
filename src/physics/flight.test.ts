@@ -10,6 +10,7 @@ import {
   solveShot,
   SURFACES,
 } from './flight'
+import { PACE, SHOTS } from '../game/tuning'
 import { netHeightAt } from '../game/constants'
 
 describe('flight model', () => {
@@ -109,5 +110,23 @@ describe('flight model', () => {
     const v2 = { x: 0, y: -8.27, z: -28.8 }
     applyBounce(v2, { x: 0, y: 0, z: 0 })
     expect(Math.abs(v.z)).toBeLessThan(Math.abs(v2.z))
+  })
+
+  it.each(['club', 'tour'] as const)('%s-pace topspin rally ball stays at a realistic height', (pace) => {
+    const s = SHOTS.topspin
+    const k = PACE[pace]
+    const from = { x: 0, y: 0.95, z: 12.2 }
+    const sol = solveShot({
+      from,
+      target: { x: 0, z: -s.depth },
+      speed: s.speed * k,
+      spin: s.spin * k,
+      sidespin: 0,
+      netClearance: s.netClearance,
+    })
+    const apex = Math.max(...sol.flight.samples.map((p) => p.y))
+    // Tour topspin crosses the net 0.9-1.5 m above the tape; club balls loop a little higher.
+    expect(sol.flight.netCrossY).toBeLessThan(pace === 'club' ? 2.35 : 2)
+    expect(apex).toBeLessThan(pace === 'club' ? 2.4 : 2.05)
   })
 })

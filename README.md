@@ -36,6 +36,8 @@ Serve keys: W flat, E slice, Q kick, R safe.
 
 - **Player:** five shirt colours on the male avatar, or the female avatar.
 - **Opponent:** Club, Pro, Champion (speed, reaction, pace, errors and how close to the lines it aims).
+  Lower levels also help you: auto-positioning toward the ball, wider timing windows, longer reach and
+  tighter shot scatter (`PLAYER_HELP` in `src/game/tuning.ts`).
 - **Court:** hard, clay, grass, tuned to the ITF Court Pace Rating bands.
 - **Pace:** Club (slower, GTA-like rallies) or Tour (pro ball speeds).
 
@@ -47,8 +49,23 @@ Serve keys: W flat, E slice, Q kick, R safe.
 | Medium (default) | 1.25x | 1024 px | SMAA, vignette |
 | Low | 1x, fewer spectators | 1024 px | SMAA, vignette |
 
-Rendering is capped at 60 fps in play and 30 fps in menus, and the resolution drops automatically if the
-frame rate does.
+Rendering is capped at 60 fps in play and 30 fps in menus, at a fixed resolution per setting.
+
+## Physics Lab
+
+Open the game with `?lab` (e.g. `http://localhost:5173/?lab`) to get a live tuning panel
+([leva](https://github.com/pmndrs/leva)) and on-court visualisation:
+
+- **View:** predicted flight (yellow, orange after the bounce), arrows on the ball for velocity (white),
+  spin axis (magenta), drag (red) and Magnus force (cyan), Rapier collider wireframes, the
+  [r3f-perf](https://github.com/utsuboco/r3f-perf) panel, and slow motion.
+- **Air:** drag coefficient, Magnus multiplier, wind.
+- **Shots:** club pace and speed/spin/net clearance/depth of every shot.
+- **Surfaces:** friction and restitution of hard, clay and grass.
+- **Difficulty:** every AI and player-help number per level.
+
+Changes apply to the next shot. The lab is code-split and not downloaded in normal play.
+`docs/RESEARCH.md` has the background: physics references, libraries considered and gameplay notes.
 
 ## Characters
 

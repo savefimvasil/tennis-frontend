@@ -86,7 +86,7 @@ export function chooseShot(ai: Athlete, ballY: number, lateral: number, spec: Ai
 
   // Aim away from the human, sometimes through the middle to stay unpredictable.
   let tx: number
-  if (Math.random() < 0.28) tx = (Math.random() * 2 - 1) * 1.8
+  if (Math.random() < spec.centre) tx = (Math.random() * 2 - 1) * 1.8
   else tx = human.x > 0.3 ? -wide : human.x < -0.3 ? wide : Math.random() < 0.5 ? -wide : wide
   const spec2 = SHOTS[shot]
   let depth = spec2.depth * (0.88 + Math.random() * 0.16)

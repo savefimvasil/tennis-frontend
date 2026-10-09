@@ -7,6 +7,7 @@ import {
   GRADE_EFFECT,
   PACE,
   PLAYER,
+  PLAYER_HELP,
   RACKET_EA,
   RALLY_BALL_SPEED,
   SERVE,
@@ -183,7 +184,7 @@ function strike(
   const height = from.y < 0.45 ? (0.45 - from.y) * 2.5 : from.y > 1.8 ? (from.y - 1.8) * 1.2 : 0
   const reach = Math.max(0, Math.abs(lateral) - 0.9) * 1.2
   const difficulty = serve ? 1 : 1 + Math.max(0, pace - 24) / 22 + height + reach
-  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty
+  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty * (side === HUMAN ? help().error : 1)
   // Depth scatters more than direction for real groundstrokes.
   let tx = target.x + gauss() * errScale * 0.75
   let tz = target.z + gauss() * errScale
@@ -210,7 +211,8 @@ function strike(
     from,
     target: { x: tx, z: tz },
     speed: spec.speed * eff.pace * lowBall * swing + rebound,
-    spin: spec.spin * (grade === 'perfect' ? 1.1 : 1),
+    // Spin scales with racket-head speed like the pace does.
+    spin: spec.spin * (grade === 'perfect' ? 1.1 : 1) * (serve ? 1 : swing),
     sidespin: serve ? SERVES[shot].sidespin : 0,
     netClearance,
     lobPitch: serve ? undefined : SHOTS[shot].lobPitch,
@@ -282,7 +284,11 @@ function timeToPlane(a: Athlete, p: V3, v: V3) {
   return plane / closing
 }
 
-function inContactWindow(a: Athlete, p: V3) {
+function help() {
+  return PLAYER_HELP[useGame.getState().difficulty]
+}
+
+function inContactWindow(a: Athlete, p: V3, reach = PLAYER.reach) {
   const f = forward(a)
   const r = right(a)
   const along = (p.x - a.x) * f.x + (p.z - a.z) * f.z
@@ -290,7 +296,7 @@ function inContactWindow(a: Athlete, p: V3) {
   const ok =
     along <= PLAYER.contactAhead &&
     along >= -PLAYER.contactBehind &&
-    Math.abs(lateral) <= PLAYER.reach &&
+    Math.abs(lateral) <= reach &&
     p.y >= PLAYER.minContactY &&
     p.y <= PLAYER.maxContactY
   return { ok, passed: along < -PLAYER.contactBehind, lateral }
@@ -356,10 +362,14 @@ function snapBallToRacket(a: Athlete) {
   if (Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z) < 0.7) ball.setTranslation(s, true)
 }
 
-function gradeFor(tt: number): Grade {
-  if (tt >= TIMING.perfect[0] && tt <= TIMING.perfect[1]) return 'perfect'
-  if (tt >= TIMING.good[0] && tt <= TIMING.good[1]) return 'good'
-  return tt > TIMING.good[1] ? 'early' : 'late'
+/** Grades a press `tt` seconds before contact; `widen` > 1 stretches the windows around the ideal. */
+function gradeFor(tt: number, widen = 1): Grade {
+  const mid = (TIMING.perfect[0] + TIMING.perfect[1]) / 2
+  // Early presses are stretched forward in time, late ones squeezed toward contact.
+  const d = tt >= mid ? mid + (tt - mid) / widen : mid - (mid - tt) / widen
+  if (d >= TIMING.perfect[0] && d <= TIMING.perfect[1]) return 'perfect'
+  if (d >= TIMING.good[0] && d <= TIMING.good[1]) return 'good'
+  return d > TIMING.good[1] ? 'early' : 'late'
 }
 
 function updateSwing(a: Athlete, dt: number) {
@@ -509,28 +519,31 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   if (input.pressed.length && (incoming || sim.phase === 'rally')) {
     const shot = input.pressed[input.pressed.length - 1]
     if (incoming) {
-      const grade = tt === Infinity ? null : gradeFor(tt)
+      const grade = tt === Infinity ? null : gradeFor(tt, help().timing)
       a.queued = { shot, grade, pressedAt: sim.time }
     }
   }
 
-  // Movement with a light assist toward the ball when a swing is queued.
+  // Movement with an assist toward the ball: strong once a swing is queued, lighter before
+  // (GTA-style auto-positioning; how much depends on the difficulty).
+  const h = help()
   const speedCap = PLAYER.speed * (a.swing !== 'none' ? PLAYER.swingSlow : 1)
   let wantX = input.moveX * speedCap
   const wantZ = -input.moveY * speedCap
-  if (a.queued && incoming && contact && a.swing === 'none') {
+  const pull = a.queued ? h.assist : sim.phase === 'rally' ? h.track : 0
+  if (pull > 0 && incoming && contact && a.swing === 'none') {
     // Line up so the ball arrives a comfortable arm-and-racket length to the side.
     const fh = contact.x - PLAYER.stance
     const bh = contact.x + PLAYER.stanceBackhand
     const stand = Math.abs(fh - a.x) < Math.abs(bh - a.x) ? fh : bh
     const dx = stand - a.x
-    if (Math.abs(dx) < 3.2) wantX += Math.max(-1, Math.min(1, dx * 2)) * PLAYER.speed * PLAYER.assist
+    if (Math.abs(dx) < 3.2) wantX += Math.max(-1, Math.min(1, dx * 2)) * PLAYER.speed * pull
   }
   moveAthlete(a, wantX, wantZ, speedCap, dt)
   clampArea(a, HUMAN)
 
   if (!a.queued || !canHit) return
-  const win = inContactWindow(a, p)
+  const win = inContactWindow(a, p, h.reach)
   // Start the swing so its contact key coincides with the ball reaching the hitting plane.
   if (a.swing === 'none' && contact && contact.t - sim.time <= TIMING.swingLead)
     startSwing(a, contact.lateral, a.queued.shot, contact.y, contact)

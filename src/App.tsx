@@ -1,10 +1,13 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { GameOver, MainMenu, PauseMenu } from './ui/Menu'
 import { useGame } from './game/store'
 import { installInput, flushInput } from './input/input'
 import { setMuted } from './audio/sound'
+import { LAB_ENABLED } from './lab/lab'
+
+const LabPanel = LAB_ENABLED ? lazy(() => import('./lab/LabPanel')) : null
 
 export default function App() {
   const screen = useGame((s) => s.screen)
@@ -39,6 +42,11 @@ export default function App() {
       {screen === 'menu' ? <MainMenu /> : null}
       {screen === 'paused' ? <PauseMenu /> : null}
       {screen === 'over' ? <GameOver /> : null}
+      {LabPanel ? (
+        <Suspense fallback={null}>
+          <LabPanel />
+        </Suspense>
+      ) : null}
     </div>
   )
 }

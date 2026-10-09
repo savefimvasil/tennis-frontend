@@ -11,8 +11,12 @@ export interface V3 {
 }
 
 const RHO = 1.21
-/** Free-flight drag of new balls (~0.51); wind-tunnel values run 15-20% higher. */
-const CD = 0.51
+/**
+ * Aerodynamic coefficients. Mutable so the Physics Lab (?lab) can tune them live.
+ * cd: free-flight drag of new balls (~0.51); wind-tunnel values run 15-20% higher.
+ * magnus: multiplier on the Stepanek lift coefficient.
+ */
+export const AERO = { cd: 0.51, magnus: 1 }
 const AREA = Math.PI * BALL.radius * BALL.radius
 const K_AIR = 0.5 * RHO * AREA
 
@@ -37,7 +41,7 @@ export function aeroForce(vGround: V3, w: V3, out: V3): V3 {
     out.x = out.y = out.z = 0
     return out
   }
-  const drag = -K_AIR * CD * speed
+  const drag = -K_AIR * AERO.cd * speed
   out.x = drag * v.x
   out.y = drag * v.y
   out.z = drag * v.z
@@ -48,7 +52,7 @@ export function aeroForce(vGround: V3, w: V3, out: V3): V3 {
     const cx = w.y * v.z - w.z * v.y
     const cy = w.z * v.x - w.x * v.z
     const cz = w.x * v.y - w.y * v.x
-    const cl = 1 / (2 + speed / (BALL.radius * spin))
+    const cl = AERO.magnus / (2 + speed / (BALL.radius * spin))
     const mag = Math.hypot(cx, cy, cz)
     if (mag > 1e-6) {
       const f = (K_AIR * cl * speed * speed) / mag
@@ -216,6 +220,11 @@ let currentSurface: Surface = SURFACES.hard
 
 export function setSurface(id: SurfaceId) {
   currentSurface = SURFACES[id]
+}
+
+/** Retunes a surface in place (Physics Lab). */
+export function tuneSurface(id: SurfaceId, mu: number, e: number) {
+  Object.assign(SURFACES[id], surface(mu, e))
 }
 
 /** Moment of inertia factor of a tennis ball (I = ALPHA m r^2). */
