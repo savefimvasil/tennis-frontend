@@ -1,15 +1,13 @@
 # Maybe Tennis?
 
-A browser tennis game inspired by GTA V's tennis minigame, built with React, Three.js
-(@react-three/fiber), Rapier physics and post-processing.
+**Play: https://maybe-tennis.com/**
 
-Play it at https://maybe-tennis.com/ (with online play) or
-https://savefimvasil.github.io/tennis-frontend/ (single player; both deployed from `main` by GitHub Actions).
+A free 3D tennis game in the browser: rally against the CPU on hard, clay or grass, or play a
+friend online. Built with React, Three.js (@react-three/fiber), Rapier physics and
+post-processing.
 
-SEO and sharing: `index.html` carries the description, Open Graph and Twitter cards and
-schema.org `VideoGame` data, plus a static intro that crawlers see without JavaScript (React
-replaces it on load). `public/` holds the favicon (`favicon.svg`, PNG sizes rendered from it),
-`manifest.webmanifest`, `robots.txt`, `sitemap.xml` and `og-image.png` (the menu, 1200×630).
+A single-player build also runs on GitHub Pages:
+https://savefimvasil.github.io/tennis-frontend/. Both are deployed from `main` by GitHub Actions.
 
 ## Run
 
@@ -32,9 +30,10 @@ npm run format   # Prettier
 | Lob | R | Y / Triangle |
 | Pause | Esc / P | Start |
 
-**Serve:** Left/Right steps along the baseline. Hold a shot key to toss and release while the meter is
-in the zone; hold Left/Right as you release to angle the serve wide or down the T. Timing sets the power.
-Serve keys: W flat, E slice, Q kick, R safe.
+**Serve:** Left/Right steps along the baseline. Hold a shot key to toss and release while the toss
+meter is in the yellow zone; timing sets the power. During the toss, Left/Right sweeps the aim
+across the service box; past the lines the serve is out, so find the balance rather than holding
+an arrow down. The serve meter floats beside your player. Serve keys: W flat, E slice, Q kick, R safe.
 
 **Rally:** press a shot key as the ball comes in. Hold an arrow to aim; Up hits deeper, Down shorter.
 
@@ -45,12 +44,17 @@ Serve keys: W flat, E slice, Q kick, R safe.
   Lower levels also help you: auto-positioning toward the ball, wider timing windows, longer reach and
   tighter shot scatter (`PLAYER_HELP` in `src/game/tuning.ts`).
 - **Court:** hard, clay, grass, tuned to the ITF Court Pace Rating bands.
-- **Pace:** Club (slower, GTA-like rallies) or Tour (pro ball speeds).
+- **Pace:** Club (slower, loopier rallies) or Tour (pro ball speeds).
+- **Format:** Quick (one set to 4 games), Set (to 6) or Match (best of 3).
+
+The match settings also apply to online games you create. Graphics quality and the frame
+rate are remembered between visits.
 
 ## Online
 
-The game looks for a multiplayer server when it starts. The **Play online** button appears
-only when a server answers. Without one, everything else works offline.
+The game looks for a multiplayer server when it starts. The **Play online** card on the main
+menu appears only when a server answers, with how many players are online (from the server's
+`/health`). Without a server, everything else works offline.
 
 The online lobby offers quick match, open or private games (join by code), and a live list
 of open games. The server is
@@ -94,7 +98,9 @@ LIVE_SERVER=http://localhost:3000 ROLE=guest npx vitest run src/net/online.live.
 | Medium (default) | 1.25x | 1024 px | SMAA, vignette |
 | Low | 1x, fewer spectators | 1024 px | SMAA, vignette |
 
-Rendering is capped at 60 fps in play and 30 fps in menus, at a fixed resolution per setting.
+Rendering is capped at 60 fps in play (or 30 fps with the frame-rate option, for quiet fans
+and battery) and 20 fps behind menus, at a fixed resolution per setting. Physics always steps
+at 120 Hz.
 
 The crowd is made of sprite impostors of the players' own avatars, baked into an atlas at
 load (one draw call per stand). The umpire and ball kids are posed avatars, bounces leave
@@ -117,6 +123,13 @@ Open the game with `?lab` (e.g. `http://localhost:5173/?lab`) to get a live tuni
 
 Changes apply to the next shot. The lab is code-split and not downloaded in normal play.
 `docs/RESEARCH.md` has the background: physics references, libraries considered and gameplay notes.
+
+## SEO and sharing
+
+`index.html` carries the description, canonical link, Open Graph and Twitter cards and
+schema.org `VideoGame` data, plus a static intro that crawlers see without JavaScript (React
+replaces it on load). `public/` holds the favicon (`favicon.svg`, PNG sizes rendered from it),
+`manifest.webmanifest`, `robots.txt`, `sitemap.xml` and `og-image.png` (the menu, 1200×630).
 
 ## Characters
 
