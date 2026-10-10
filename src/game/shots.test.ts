@@ -65,3 +65,64 @@ describe('shot shapes', () => {
     })
   }
 })
+
+describe('kick serve', () => {
+  it('jumps sideways off the bounce, to the server’s right', () => {
+    setSurface('hard')
+    setWind(0, 0)
+    // Human serves from +z toward -z: the server's right is +x.
+    const from = { x: 0.6, y: 2.7, z: 12.2 }
+    const r = resolveShot(
+      {
+        from,
+        vin: { x: 0, y: 0, z: 0 },
+        serve: true,
+        shot: 'topspin',
+        grade: 'good',
+        target: { x: -2, z: -5.5 },
+        running: false,
+        lateral: 0,
+        rightX: 1,
+        hand: 1,
+        swingMul: 1,
+        miss: null,
+      },
+      () => 0.5,
+    )
+    const f = simulate(from, r.v, r.w, { maxBounces: 2, maxT: 4 })
+    const b = f.bounces[0]
+    const before = f.samples.filter((s) => s.t <= b.t).at(-1)!
+    const after = f.samples.find((s) => s.t > b.t + 0.02)!
+    // Sideways speed gained at the bounce, beyond the curve it already had.
+    expect(after.vx - before.vx).toBeGreaterThan(1)
+  })
+})
+
+describe('errors are mishits that fly by the same physics', () => {
+  const base = (miss: 'net' | 'long' | 'wide', tx: number) =>
+    resolveShot(
+      {
+        from: { x: 0, y: 0.95, z: 12 },
+        vin: { x: 0, y: -2, z: 22 },
+        serve: false,
+        shot: 'topspin',
+        grade: 'good',
+        target: { x: tx, z: -9.6 },
+        running: false,
+        lateral: 1,
+        rightX: -1,
+        hand: 1,
+        swingMul: 1,
+        miss,
+      },
+      () => 0.5,
+    )
+  setSurface('hard')
+  setWind(0, 0)
+  it('into the net', () => expect(base('net', 0).flight.intoNet).toBe(true))
+  it('long', () => expect(-base('long', 0).landing.z).toBeGreaterThan(11.885))
+  it('wide, to the side it was aimed', () => {
+    expect(base('wide', 2.5).landing.x).toBeGreaterThan(4.115)
+    expect(base('wide', -2.5).landing.x).toBeLessThan(-4.115)
+  })
+})

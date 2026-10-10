@@ -14,24 +14,30 @@ export interface ShotSpec {
 
 export const SHOTS: Record<ShotType, ShotSpec> = {
   // Four shapes, not four speeds of the same shot:
-  // - topspin: ~2700 rpm, a high arc 1-1.4 m over the tape, dips in deep and kicks up high;
+  // - topspin: ~3000 rpm, a high arc 1-1.4 m over the tape, dips in deep and kicks up high
+  //   (spin adds drag, so it is struck harder than it lands: ~120 km/h on tour pace);
   // - slice: backspin on a fixed low launch, skims ~0.3 m over the tape to mid-court and
   //   stays low and slows after the bounce (as a speed-solved shot it used to float long);
   // - flat: the fastest and lowest, deepest, skidding through;
   // - lob: high and deep over the net player.
-  topspin: { speed: 30, spin: 280, netClearance: 0.55, depth: 9.6 },
+  topspin: { speed: 34, spin: 310, netClearance: 0.55, depth: 9.6 },
   slice: { speed: 25, spin: -260, netClearance: 0.28, depth: 8.0, lobPitch: 0.07 },
   lob: { speed: 0, spin: 110, netClearance: 2.2, depth: 9.8, lobPitch: 0.9 },
-  flat: { speed: 37, spin: 50, netClearance: 0.15, depth: 10.2 },
+  flat: { speed: 40, spin: 50, netClearance: 0.15, depth: 10.2 },
 }
 
 /**
  * Serve types for a right-hander. sidespin > 0 curves the ball to the server's left (slice),
- * < 0 to the right (kick).
+ * < 0 to the right. gyro is spin about the line of flight: nothing in the air, but at the
+ * bounce it grips and kicks the ball sideways (> 0 to the server's right). The kick serve's
+ * tilted axis is all three: ~4000 rpm that dips it in, then jumps it up and away.
  */
-export const SERVES: Record<ShotType, { speed: number; spin: number; sidespin: number; netClearance: number }> = {
+export const SERVES: Record<
+  ShotType,
+  { speed: number; spin: number; sidespin: number; gyro?: number; netClearance: number }
+> = {
   flat: { speed: 52, spin: 60, sidespin: 0, netClearance: 0.04 },
-  topspin: { speed: 40, spin: 260, sidespin: -90, netClearance: 0.3 },
+  topspin: { speed: 40, spin: 330, sidespin: -60, gyro: 250, netClearance: 0.3 },
   slice: { speed: 44, spin: 80, sidespin: 200, netClearance: 0.12 },
   lob: { speed: 34, spin: 150, sidespin: 0, netClearance: 0.4 },
 }
@@ -69,8 +75,14 @@ export const TIMING = {
 
 export const PLAYER = {
   speed: 6.0,
-  /** Players reach ~5 m/s in about a second; braking is quicker than accelerating. */
-  accel: 9,
+  /**
+   * Holding a run in one direction builds up to a sprint over `sprintRamp` seconds: a quick
+   * first step, then a little extra for the long chases out wide.
+   */
+  sprint: 7.0,
+  sprintRamp: 0.6,
+  /** Players reach ~5 m/s in well under a second; braking is quicker than accelerating. */
+  accel: 11,
   brake: 18,
   swingSlow: 0.45,
   /** Max sideways distance from body to ball at contact. */
@@ -125,6 +137,8 @@ export interface AiSpec {
   returnError: number
   /** Extra sideways reach (m) when returning serve: lunges and blocked returns. */
   returnReach: number
+  /** Typical error (m, sideways) in reading where the ball will be: it arrives off-balance. */
+  readNoise: number
 }
 
 /** Help the human player gets at each difficulty. */
@@ -163,6 +177,7 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     centre: 0.5,
     returnError: 0.2,
     returnReach: 0.2,
+    readNoise: 0.55,
   },
   pro: {
     speed: 5.6,
@@ -176,9 +191,11 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     centre: 0.28,
     returnError: 0.12,
     returnReach: 0.45,
+    readNoise: 0.32,
   },
   ace: {
-    speed: 6.6,
+    // As fast as the player (both sprint to 7 m/s): it wins on reading the ball, not on legs.
+    speed: 6.0,
     reaction: 0.1,
     pace: 1.06,
     grades: { perfect: 0.65, good: 0.33, early: 0.01, late: 0.01 },
@@ -189,5 +206,6 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     centre: 0.15,
     returnError: 0.12,
     returnReach: 0.6,
+    readNoise: 0.16,
   },
 }

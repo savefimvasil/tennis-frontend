@@ -1,5 +1,5 @@
 import { COURT, HUMAN, type Side } from './constants'
-import { solveShot, type ShotSolution, type V3 } from '../physics/flight'
+import { simulate, solveShot, type ShotSolution, type V3 } from '../physics/flight'
 import {
   GRADE_EFFECT,
   RACKET_EA,
@@ -90,6 +90,18 @@ export function rallyTarget(shot: ShotType, moveX: number, moveY: number) {
   return { x: tx, z: -depth }
 }
 
+/**
+ * The lob is only on against a player at the net (inside about the service line). Lobbed
+ * over a baseliner, the high, deep, kicking ball is easy to take and hard for them to miss
+ * hitting back hard; asked for anyway, the swing comes out as a topspin drive. The server
+ * applies the same rule to online swings.
+ */
+export const LOB_MAX_NET_DISTANCE = COURT.serviceLine + 0.6
+
+export function rallyShot(shot: ShotType, opponentNetDistance: number): ShotType {
+  return shot === 'lob' && opponentNetDistance > LOB_MAX_NET_DISTANCE ? 'topspin' : shot
+}
+
 export type Miss = 'net' | 'long' | 'wide' | null
 
 export interface ShotInput {
@@ -138,25 +150,61 @@ export function resolveShot(inp: ShotInput, rng: Rng): ShotResult {
     const bias = (grade === 'early' ? -1 : 1) * inp.hand * (0.8 + rng() * 0.7)
     tx += inp.rightX * bias
   }
-  if (miss === 'long') tz += Math.sign(tz) * (COURT.halfLength - Math.abs(tz) + 0.4 + rng() * 1.2)
-  if (miss === 'wide') tx = Math.sign(tx || 1) * (COURT.singlesHalfWidth + 0.3 + rng() * 1)
   const spec = serve ? SERVES[shot] : SHOTS[shot]
   let netClearance = spec.netClearance
   // Mistimed shots sometimes find the tape.
   if ((grade === 'early' || grade === 'late') && rng() < 0.3) netClearance -= 0.25 + rng() * 0.3
-  if (miss === 'net') netClearance = -0.35 - rng() * 0.3
   const lowBall = from.y < 0.45 && !serve ? 0.85 : 1
+  // Above the shoulder there is less racket speed to put through the ball, and less spin.
+  const highBall = from.y > 1.6 && !serve ? Math.max(0.8, 1 - (from.y - 1.6) * 0.15) : 1
   // Racket impact: part of the incoming ball's speed comes back (v_out = eA v_in + (1 + eA) V_racket).
   const rebound = serve || shot === 'lob' ? 0 : Math.max(-3, Math.min(8, RACKET_EA * (pace - RALLY_BALL_SPEED)))
   const sol = solveShot({
     from,
     target: { x: tx, z: tz },
-    speed: spec.speed * eff.pace * lowBall * inp.swingMul + rebound,
+    speed: spec.speed * eff.pace * lowBall * highBall * inp.swingMul + rebound,
     // Spin scales with racket-head speed like the pace does.
-    spin: spec.spin * (grade === 'perfect' ? 1.1 : 1) * (serve ? 1 : inp.swingMul),
+    spin: spec.spin * (grade === 'perfect' ? 1.1 : 1) * (serve ? 1 : inp.swingMul) * highBall,
     sidespin: serve ? SERVES[shot].sidespin : 0,
+    gyro: serve ? (SERVES[shot].gyro ?? 0) : 0,
     netClearance,
     lobPitch: serve ? undefined : SHOTS[shot].lobPitch,
   })
+  if (miss) return { ...mishit(sol, miss, tx, rng), speed: Math.hypot(sol.v.x, sol.v.y, sol.v.z) }
   return { ...sol, speed: Math.hypot(sol.v.x, sol.v.y, sol.v.z) }
+}
+
+/**
+ * A forced or unforced error as it happens on court: the swing was meant for the target but
+ * the ball leaves a few degrees off (racket face closed into the net, open and long, or late
+ * and wide), and then flies by the same physics as any other ball.
+ */
+function mishit(sol: ShotSolution, miss: Exclude<Miss, null>, tx: number, rng: Rng): ShotSolution {
+  const v = sol.v
+  const h = Math.hypot(v.x, v.z)
+  let speed = Math.hypot(v.x, v.y, v.z)
+  let pitch = Math.atan2(v.y, h)
+  let yaw = 0
+  // Into the net: a face closed a few degrees more than the ball's arc can forgive.
+  if (miss === 'net') pitch -= 0.04 + rng() * 0.04
+  if (miss === 'long') {
+    speed *= 1.12 + rng() * 0.1
+    pitch += 0.02 + rng() * 0.03
+  }
+  // Rotating the line by +yaw moves a ball travelling toward -z to -x: push it toward its side.
+  if (miss === 'wide') yaw = Math.sign(tx || 1) * Math.sign(v.z || -1) * (0.08 + rng() * 0.06)
+  const hx = (v.x / h) * Math.cos(yaw) + (v.z / h) * Math.sin(yaw)
+  const hz = -(v.x / h) * Math.sin(yaw) + (v.z / h) * Math.cos(yaw)
+  const from = sol.flight.samples[0]
+  const launch = (p: number) => ({ x: hx * Math.cos(p) * speed, y: Math.sin(p) * speed, z: hz * Math.cos(p) * speed })
+  let out = launch(pitch)
+  let flight = simulate(from, out, sol.w, { maxBounces: 1, maxT: 5 })
+  for (let i = 0; miss === 'net' && !flight.intoNet && i < 12; i++) {
+    pitch -= 0.02
+    out = launch(pitch)
+    flight = simulate(from, out, sol.w, { maxBounces: 1, maxT: 5 })
+  }
+  const b = flight.bounces[0]
+  const end = flight.samples[flight.samples.length - 1]
+  return { v: out, w: sol.w, flight, landing: b ? { x: b.x, z: b.z } : { x: end.x, z: end.z } }
 }

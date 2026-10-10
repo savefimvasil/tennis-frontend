@@ -389,7 +389,7 @@ export function ControlsGrid() {
           <dt>
             <Key k="R" />
           </dt>
-          <dd>Lob</dd>
+          <dd>Lob, over a player at the net</dd>
           <dt>
             <Key k="Esc" />
           </dt>
@@ -442,7 +442,7 @@ export function ControlsGrid() {
           <dt>
             <Key k="Y" />
           </dt>
-          <dd>Lob</dd>
+          <dd>Lob, over a player at the net</dd>
         </dl>
       </section>
     </div>

@@ -13,7 +13,7 @@ export interface V3 {
 const RHO = 1.21
 /**
  * Aerodynamic coefficients. Mutable so the Physics Lab (?lab) can tune them live.
- * cd: free-flight drag of new balls (~0.51); wind-tunnel values run 15-20% higher.
+ * cd: free-flight drag of a new ball without spin (~0.51); spin adds to it (see spinDrag).
  * magnus: multiplier on the Stepanek lift coefficient.
  */
 export const AERO = { cd: 0.51, magnus: 1 }
@@ -41,12 +41,12 @@ export function aeroForce(vGround: V3, w: V3, out: V3): V3 {
     out.x = out.y = out.z = 0
     return out
   }
-  const drag = -K_AIR * AERO.cd * speed
+  const spin = Math.hypot(w.x, w.y, w.z)
+  const drag = -K_AIR * (AERO.cd + spinDrag((BALL.radius * spin) / speed)) * speed
   out.x = drag * v.x
   out.y = drag * v.y
   out.z = drag * v.z
 
-  const spin = Math.hypot(w.x, w.y, w.z)
   if (spin > 1e-3) {
     // Magnus: direction of w x v, lift coefficient from Stepanek (1988).
     const cx = w.y * v.z - w.z * v.y
@@ -62,6 +62,16 @@ export function aeroForce(vGround: V3, w: V3, out: V3): V3 {
     }
   }
   return out
+}
+
+/**
+ * Extra drag from spin, from Stepanek's (1988) fit Cd = 0.508 + (22.503 + 4.196 S^-2.5)^-0.4
+ * with spin ratio S = r w / v: heavy topspin (S ~ 0.3) drags ~30% more than a flat ball,
+ * so it slows and drops sooner.
+ */
+export function spinDrag(S: number): number {
+  if (S < 1e-3) return 0
+  return Math.pow(22.503 + 4.196 * Math.pow(S, -2.5), -0.4)
 }
 
 export interface Bounce {
@@ -88,6 +98,8 @@ export interface Flight {
   /** Height of the ball as it crosses the net plane, if it does before the first bounce. */
   netCrossY: number | null
   netCrossX: number | null
+  /** The ball meets the net below the tape and stops there (the flight ends at the net). */
+  intoNet: boolean
 }
 
 export interface SimOptions {
@@ -139,6 +151,11 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
       const f = pz / (pz - p.z)
       netCrossY = p.y - v.y * dt * (1 - f)
       netCrossX = p.x - v.x * dt * (1 - f)
+      // Below the tape (inside the posts) the net stops it: the prediction must not fly on.
+      if (Math.abs(netCrossX) < COURT.netPostX && netCrossY + r < netHeightAt(netCrossX) - 0.02) {
+        samples.push({ t, x: netCrossX, y: netCrossY, z: 0, vx: 0, vy: 0, vz: 0 })
+        return { samples, bounces, netCrossY, netCrossX, intoNet: true }
+      }
     }
 
     if (p.y <= r && v.y < 0) {
@@ -148,7 +165,7 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
       applyBounce(v, w)
     }
   }
-  return { samples, bounces, netCrossY, netCrossX }
+  return { samples, bounces, netCrossY, netCrossX, intoNet: false }
 }
 
 export interface BallState {
@@ -247,8 +264,8 @@ export const SURFACES: Record<SurfaceId, Surface> = {
   clay: surface(0.75, 0.84),
   /** Medium-fast acrylic (CPR ~41). */
   hard: surface(0.6, 0.8),
-  /** Fast (CPR ~50): skids low. */
-  grass: surface(0.55, 0.78),
+  /** Fast (CPR ~50): skids, and the soft turf takes more out of the bounce (stays low). */
+  grass: surface(0.6, 0.74),
 }
 
 export const HARD_COURT = SURFACES.hard
@@ -287,6 +304,12 @@ export interface ShotRequest {
   lobPitch?: number
   /** Spin about the vertical axis (rad/s): positive curves the ball to its left. */
   sidespin?: number
+  /**
+   * Spin about the direction of travel (rad/s), as on a kick serve's tilted axis. It does
+   * nothing in the air but grips at the bounce and kicks the ball sideways: positive to the
+   * ball's right.
+   */
+  gyro?: number
 }
 
 export interface ShotSolution {
@@ -304,7 +327,8 @@ function launch(req: ShotRequest, speed: number, pitch: number): { v: V3; w: V3;
   const c = Math.cos(pitch)
   const v = { x: d.x * c * speed, y: Math.sin(pitch) * speed, z: d.z * c * speed }
   const a = topspinAxis(d.x, d.z)
-  const w = { x: a.x * req.spin, y: req.sidespin ?? 0, z: a.z * req.spin }
+  const g = req.gyro ?? 0
+  const w = { x: a.x * req.spin + d.x * g, y: req.sidespin ?? 0, z: a.z * req.spin + d.z * g }
   return { v, w, d }
 }
 
@@ -315,6 +339,8 @@ const SOLVER_OPTS: SimOptions = { maxBounces: 1, maxT: 5, sampleEvery: 1_000_000
 function carry(req: ShotRequest, speed: number, pitch: number): { dist: number; flight: Flight } {
   const { v, w, d } = launch(req, speed, pitch)
   const flight = simulate(req.from, v, w, SOLVER_OPTS)
+  // Into the net is short of any target past it: the search raises the trajectory.
+  if (flight.intoNet) return { dist: 0, flight }
   const b = flight.bounces[0]
   if (!b) return { dist: Infinity, flight }
   return { dist: (b.x - req.from.x) * d.x + (b.z - req.from.z) * d.z, flight }

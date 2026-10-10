@@ -358,7 +358,7 @@ function Controls() {
         <Key k="E" /> slice
       </span>
       <span>
-        <Key k="R" /> lob
+        <Key k="R" /> lob <small>(vs net)</small>
       </span>
       <span>
         <Key k="Esc" /> pause

@@ -1,3 +1,4 @@
+import { LOB_MAX_NET_DISTANCE } from '../game/shot'
 import { COURT } from '../game/constants'
 import { sim, type Athlete } from '../game/sim'
 import { PLAYER, SHOTS, type AiSpec, type Grade, type ShotType } from '../game/tuning'
@@ -76,11 +77,11 @@ export function chooseShot(ai: Athlete, ballY: number, lateral: number, spec: Ai
   const margin = Math.max(0.45, (spec.aimMargin + Math.random() * 0.5) * (1 - aggression))
   const wide = COURT.singlesHalfWidth - margin
   const stretched = Math.abs(lateral) > 1.15 || ballY < 0.35
-  const humanAtNet = human.z < 6
+  const humanAtNet = human.z < LOB_MAX_NET_DISTANCE
   let shot: ShotType = 'topspin'
   const r = Math.random()
   if (humanAtNet) shot = r < 0.35 ? 'lob' : r < 0.75 ? 'topspin' : 'flat'
-  else if (stretched) shot = r < 0.45 ? 'slice' : r < 0.7 ? 'lob' : 'topspin'
+  else if (stretched) shot = r < 0.6 ? 'slice' : 'topspin'
   else if (sitter && Math.random() < 0.7) shot = r < 0.6 ? 'flat' : 'topspin'
   else shot = r < 0.68 ? 'topspin' : r < 0.84 ? 'slice' : 'flat'
 

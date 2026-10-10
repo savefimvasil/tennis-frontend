@@ -27,6 +27,7 @@ import {
   shotRng,
   type Miss,
   type Rng,
+  rallyShot,
 } from './shot'
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
@@ -39,6 +40,9 @@ let serveClock = 0
 let serveAim = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
+let netRepredictAt = 0
+/** How far off (m, sideways) the AI's read of the current incoming ball is. */
+let aiReadError = 0
 
 /** Random source for a side's next shot: Math.random offline, the rally seed online. */
 let shotRandom: (side: Side) => Rng = () => Math.random
@@ -231,6 +235,10 @@ function strike(
   ball.setLinvel(sol.v, true)
   ball.setAngvel(sol.w, true)
   sim.lastHitter = side
+  if (side === HUMAN) {
+    const spec = AI_LEVELS[st.difficulty]
+    aiReadError = (Math.random() + Math.random() + Math.random() - 1.5) * 1.4 * spec.readNoise
+  }
   sim.hits += 1
   sim.bounces = 0
   sim.firstBounce = null
@@ -259,6 +267,16 @@ function strike(
 
 /** Moves with bounded acceleration: speeding up is slower than braking, so changing direction costs time. */
 function moveAthlete(a: Athlete, wantX: number, wantZ: number, maxSpeed: number, dt: number) {
+  // A run held in one direction builds toward a sprint; turning or easing off resets it.
+  const want = Math.hypot(wantX, wantZ)
+  const sp0 = Math.hypot(a.vx, a.vz)
+  const steady = want > maxSpeed * 0.9 && sp0 > 1 && a.vx * wantX + a.vz * wantZ > 0.9 * want * sp0
+  a.run = steady ? Math.min(PLAYER.sprintRamp, a.run + dt) : Math.max(0, a.run - dt * 3)
+  const k = a.run / PLAYER.sprintRamp
+  const boost = 1 + (PLAYER.sprint / PLAYER.speed - 1) * k * k * (3 - 2 * k)
+  maxSpeed *= boost
+  wantX *= boost
+  wantZ *= boost
   const dvx = wantX - a.vx
   const dvz = wantZ - a.vz
   const dv = Math.hypot(dvx, dvz)
@@ -373,7 +391,8 @@ function snapBallToRacket(a: Athlete) {
   const s = a.sweet
   if (!ball || !s) return
   const p = ball.translation()
-  if (Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z) < 0.7) ball.setTranslation(s, true)
+  // Close enough to read as the strings meeting it; further off, a jump would show.
+  if (Math.hypot(p.x - s.x, p.y - s.y, p.z - s.z) < 0.4) ball.setTranslation(s, true)
 }
 
 function updateSwing(a: Athlete, dt: number) {
@@ -553,9 +572,12 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   // (GTA-style auto-positioning; how much depends on the difficulty).
   const h = help()
   const speedCap = PLAYER.speed * (a.swing !== 'none' ? PLAYER.swingSlow : 1)
-  let wantX = input.moveX * speedCap
-  const wantZ = -input.moveY * speedCap
-  const pull = a.queued ? h.assist : sim.phase === 'rally' ? h.track : 0
+  // Once a shot is called the stick mostly aims it (read at contact) and the assist does the
+  // footwork: running toward a ball no longer drags the shot the same way.
+  const steer = a.queued && incoming ? 0.3 : 1
+  let wantX = input.moveX * speedCap * steer
+  const wantZ = -input.moveY * speedCap * steer
+  const pull = a.queued ? Math.max(h.assist, 0.85) : sim.phase === 'rally' ? h.track : 0
   if (pull > 0 && incoming && contact && a.swing === 'none') {
     // Line up so the ball arrives a comfortable arm-and-racket length to the side.
     const fh = contact.x - PLAYER.stance
@@ -582,15 +604,16 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
       pressT = online.pressT ?? online.contactT
       grade = gradeFor((online.contactT - pressT) / 1000, ONLINE_HELP.timing)
     }
-    startSwing(a, win.lateral, a.queued.shot, p.y)
+    const shot = rallyShot(a.queued.shot, Math.abs(sim.athletes[AI].z))
+    startSwing(a, win.lateral, shot, p.y)
     useGame.getState().showTiming(grade)
     snapBallToRacket(a)
     const aim = { x: Math.max(-1, Math.min(1, input.moveX)), y: Math.max(-1, Math.min(1, input.moveY)) }
     strike(
       HUMAN,
-      a.queued.shot,
+      shot,
       grade,
-      rallyTarget(a.queued.shot, aim.x, aim.y),
+      rallyTarget(shot, aim.x, aim.y),
       false,
       null,
       online ? Math.max(-ONLINE_HELP.reach, Math.min(ONLINE_HELP.reach, win.lateral)) : win.lateral,
@@ -650,7 +673,8 @@ function updateAI(dt: number, p: V3, v: V3) {
         serveReturn ? { ...spec, reaction: spec.reaction * 0.4 } : spec,
         serveReturn,
       )
-      if (plan) a.target = plan
+      // The read is not perfect: the AI commits to a spot a little off the true one.
+      if (plan) a.target = { ...plan, x: plan.x + aiReadError }
     }
     // Decide once whether to leave a ball that is going out.
     if (sim.landing && sim.bounces === 0 && !aiLetGo) {
@@ -661,9 +685,9 @@ function updateAI(dt: number, p: V3, v: V3) {
       if ((out || serveOut) && Math.random() < spec.readsOut) aiLetGo = true
     }
   } else if (sim.lastHitter === AI) {
-    // Recover toward the centre of the baseline, shading to the ball side.
+    // Recover toward the middle of the angles the reply can take: shade well to the ball side.
     const land = sim.landing
-    a.target = { x: land ? land.x * 0.3 : 0, z: -(COURT.halfLength + 0.8) }
+    a.target = { x: land ? land.x * 0.45 : 0, z: -(COURT.halfLength + 0.8) }
   }
 
   const elapsed = sim.time - sim.predictionStart
@@ -794,6 +818,9 @@ export function onNetTouch() {
     sim.netTouched = true
     const b = sim.ball?.translation()
     if (b) pushEvent({ kind: 'net', x: b.x, y: b.y, z: b.z, power: 0.5 })
+    // The cord changed the flight: re-read it once the contact is over, so the landing ring
+    // and the AI follow the ball that dribbles over (or back) instead of the old path.
+    netRepredictAt = sim.time + 0.05
   }
 }
 
@@ -832,6 +859,13 @@ export function stepGame(dt: number) {
     aeroForce(v, ball.angvel(), force)
     ball.resetForces(true)
     ball.addForce(force, true)
+  }
+
+  if (netRepredictAt && sim.time >= netRepredictAt && !sim.held) {
+    netRepredictAt = 0
+    predictFromBall()
+    const land = sim.prediction?.bounces[0]
+    if (sim.bounces === 0) sim.landing = land ? { x: land.x, z: land.z, t: sim.time } : null
   }
 
   const hitsBefore = sim.hits

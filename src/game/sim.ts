@@ -25,6 +25,8 @@ export interface Athlete {
   target: { x: number; z: number } | null
   celebrate: number
   /** Split-step timer (s remaining). */
+  /** Seconds of sustained running in one direction: builds top speed up to a sprint. */
+  run: number
   split: number
   /** Ball height expected at contact, used to bend the swing. */
   contactY: number
@@ -94,6 +96,7 @@ function makeAthlete(yaw: number): Athlete {
     target: null,
     celebrate: 0,
     split: 0,
+    run: 0,
     contactY: 1,
     aim: null,
     contactAt: 0,
