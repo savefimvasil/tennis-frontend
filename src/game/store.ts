@@ -35,6 +35,9 @@ function save(key: string, value: string) {
 
 export type Quality = 'high' | 'medium' | 'low'
 
+/** A touch-first device (phone, tablet). */
+const TOUCH = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
+
 /**
  * Guided practice: a long match against the easy CPU with a coach panel. Steps: serve two
  * in, return three in with good timing, then aim one each way.
@@ -62,6 +65,11 @@ interface GameStore {
   fps: FpsCap
   pace: PaceId
   surface: SurfaceId
+  /**
+   * The venue built in 3D. It follows `surface` when a match starts, not on every click in the
+   * menu: the menu shows a picture of each venue, so switching there costs nothing.
+   */
+  venue: SurfaceId
   /** Player's character/outfit id (see scene/athlete/skins.ts). */
   skin: string
   match: MatchState
@@ -126,10 +134,12 @@ export const useGame = create<GameStore>((set, get) => ({
   opponentName: 'R. Okafor',
   difficulty: saved('difficulty', ['easy', 'pro', 'ace'], 'pro'),
   format: saved('format', Object.keys(FORMATS) as FormatId[], 'quick'),
-  quality: saved('quality', ['high', 'medium', 'low'], 'medium'),
-  fps: saved('fps', ['60', '30'], '60'),
+  // Phones and tablets start on Low at 30 fps: they run hot and drain fast otherwise.
+  quality: saved('quality', ['high', 'medium', 'low'], TOUCH ? 'low' : 'medium'),
+  fps: saved('fps', ['60', '30'], TOUCH ? '30' : '60'),
   pace: saved('pace', ['club', 'tour'], 'club'),
   surface: initialSurface,
+  venue: initialSurface,
   skin: saved('skin', SKIN_IDS, 'navy'),
   match: newMatch(FORMATS.quick, 0),
   serveNumber: 1,
@@ -208,6 +218,7 @@ export const useGame = create<GameStore>((set, get) => ({
     const format = restore ? restore.format : get().format
     set({
       ...(restore ?? {}),
+      venue: get().surface,
       practice: null,
       mode: 'solo',
       opponentName: 'R. Okafor',
@@ -264,6 +275,7 @@ export const useGame = create<GameStore>((set, get) => ({
       opponentName: opponent,
       format,
       surface,
+      venue: surface,
       pace,
       screen: 'playing',
       match,

@@ -216,7 +216,7 @@ const markFragment = /* glsl */ `
 
 /** Marks where the ball bounced, stretched along its path; they fade at a surface-dependent rate. */
 function BallMarks() {
-  const surface = useGame((s) => s.surface)
+  const surface = useGame((s) => s.venue)
   const mesh = useRef<THREE.InstancedMesh>(null!)
   const state = useMemo(() => ({ next: 0, seen: 0, life: new Float32Array(MARKS) }), [])
   const geometry = useMemo(() => {

@@ -103,7 +103,7 @@ function GameLoop({ running, timeScale }: { running: boolean; timeScale: number 
 const PRESETS = {
   high: { dprMax: 1.5, shadow: 2048 },
   medium: { dprMax: 1.25, shadow: 1024 },
-  low: { dprMax: 1, shadow: 1024 },
+  low: { dprMax: 1, shadow: 512 },
 } as const
 
 /**
@@ -114,6 +114,7 @@ const PRESETS = {
 function FrameLimiter({ fps }: { fps: number }) {
   const invalidate = useThree((s) => s.invalidate)
   useEffect(() => {
+    if (fps <= 0) return
     let raf = 0
     let last = 0
     const interval = 1000 / fps
@@ -136,7 +137,7 @@ export function Scene() {
   const quality = useGame((s) => s.quality)
   const screen = useGame((s) => s.screen)
   const skin = useGame((s) => s.skin)
-  const surface = useGame((s) => s.surface)
+  const surface = useGame((s) => s.venue)
   const preset = PRESETS[quality]
   // A fixed pixel ratio per quality. Changing it on the fly (as an automatic performance
   // monitor did) reallocates every render target and recompiles shaders: that was the freezing.
@@ -164,7 +165,8 @@ export function Scene() {
       }}
     >
       {/* Menus only show a slow orbit behind the panels: 20 fps is plenty and keeps the GPU cool. */}
-      <FrameLimiter fps={running ? fpsCap : 20} />
+      {/* The menus show a picture of the venue instead (MenuBackdrop): no frames there at all. */}
+      <FrameLimiter fps={running ? fpsCap : screen === 'menu' || screen === 'online' ? 0 : 20} />
       <Lighting key={`${shadowSize}-${surface}`} shadowSize={shadowSize} indoor={surface === 'hard'} />
       <GameLoop running={running} timeScale={timeScale} />
       <ServeAnchor />

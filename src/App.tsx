@@ -7,6 +7,7 @@ import { startNet } from './net/net'
 import { useGame } from './game/store'
 import { installInput, flushInput, padStartPressed } from './input/input'
 import { useUmpire } from './audio/umpire'
+import { MenuBackdrop } from './ui/MenuBackdrop'
 import { TouchControls, useTouchDevice } from './ui/TouchControls'
 import { setMuted } from './audio/sound'
 import { LAB_ENABLED } from './lab/lab'
@@ -60,7 +61,8 @@ export default function App() {
   useEffect(() => setMuted(muted), [muted])
 
   return (
-    <div className="app">
+    <div className={screen === 'menu' || screen === 'online' ? 'app menu-mode' : 'app'}>
+      {screen === 'menu' || screen === 'online' ? <MenuBackdrop /> : null}
       {/* The 3D scene (three, post-processing) streams in after the menu has painted. */}
       <Suspense fallback={null}>
         <Scene />

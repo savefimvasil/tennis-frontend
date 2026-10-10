@@ -86,7 +86,7 @@ function useDisposeMaterials(mats: SurfaceMaterials) {
 
 /** Photo-scanned surface: tiled detail tinted by a non-repeating macro colour map. Suspends while loading. */
 function usePhotoMaterials(): SurfaceMaterials {
-  const surface = useGame((s) => s.surface)
+  const surface = useGame((s) => s.venue)
   const detail = usePbr(COURT_SETS[surface])
   const mats = useMemo(() => {
     const d = DETAIL[surface]
@@ -108,7 +108,7 @@ function usePhotoMaterials(): SurfaceMaterials {
 
 /** Procedural stand-in shown until the photo textures have loaded. */
 function useProceduralMaterials(): SurfaceMaterials {
-  const surface = useGame((s) => s.surface)
+  const surface = useGame((s) => s.venue)
   const mats = useMemo(() => {
     const innerKind = surface
     const outerKind = surface === 'hard' ? 'hardOuter' : surface

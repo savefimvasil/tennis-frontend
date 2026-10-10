@@ -1851,3 +1851,83 @@ button:disabled {
   border-color: var(--ball);
   color: var(--ball);
 }
+
+/* ---------------------------------------------------------------- menu backdrop */
+
+.menu-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0d1118;
+}
+
+.menu-backdrop img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The 3D canvas renders nothing behind the menus; the backdrop stands in for it. */
+.app.menu-mode canvas {
+  visibility: hidden;
+}
+
+/* ---------------------------------------------------------------- touch screens */
+
+/* No text selection, copy callouts or tap flashes while playing on a phone (inputs keep them). */
+.app,
+.app *:not(input):not(textarea) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Compact hints on touch screens: the play area is small. */
+.touch .serve-panel {
+  transform-origin: top left;
+  font-size: 12px;
+  padding: 8px 10px;
+  min-width: 0;
+  width: 220px;
+}
+.touch .serve-call {
+  font-size: 16px;
+}
+.touch .telemetry {
+  display: none;
+}
+.touch .coach {
+  width: min(300px, calc(100vw - 32px));
+  padding: 8px 12px 10px;
+}
+.touch .coach b {
+  font-size: 16px;
+}
+.touch .coach p {
+  font-size: 12px;
+}
+.touch .serve-speed b {
+  font-size: 24px;
+}
+.touch .review b {
+  font-size: 22px;
+}
+.touch .touch-stick-hint {
+  display: none;
+}
+/* Blurring what is behind a panel is re-rendered every frame: too costly on a phone's GPU. */
+.touch * {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+.touch .scoreboard {
+  transform: scale(0.72);
+  transform-origin: top left;
+}
+.touch .hud-right {
+  transform: scale(0.8);
+  transform-origin: top right;
+}
