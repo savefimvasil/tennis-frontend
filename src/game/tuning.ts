@@ -116,7 +116,7 @@ export const SERVE = {
   aimMax: 1.6,
 }
 
-export type Difficulty = 'easy' | 'pro' | 'ace'
+export type Difficulty = 'beginner' | 'easy' | 'pro' | 'champion'
 
 export interface AiSpec {
   speed: number
@@ -156,16 +156,17 @@ export interface PlayerHelp {
 }
 
 export const PLAYER_HELP: Record<Difficulty, PlayerHelp> = {
-  easy: { assist: 1, track: 0.45, timing: 1.4, reach: 1.85, error: 0.75 },
-  pro: { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 },
-  ace: { assist: 0.6, track: 0, timing: 1, reach: 1.55, error: 1 },
+  beginner: { assist: 1, track: 0.45, timing: 1.4, reach: 1.85, error: 0.75 },
+  easy: { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 },
+  pro: { assist: 0.6, track: 0, timing: 1, reach: 1.55, error: 1 },
+  champion: { assist: 0.5, track: 0, timing: 0.92, reach: 1.5, error: 1.05 },
 }
 
 /** Online matches: both players get the same, mid-level help (the server enforces it). */
 export const ONLINE_HELP: PlayerHelp = { assist: 0.75, track: 0.2, timing: 1.15, reach: 1.65, error: 0.85 }
 
 export const AI_LEVELS: Record<Difficulty, AiSpec> = {
-  easy: {
+  beginner: {
     speed: 4.5,
     reaction: 0.42,
     pace: 0.86,
@@ -179,7 +180,7 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     returnReach: 0.2,
     readNoise: 0.55,
   },
-  pro: {
+  easy: {
     speed: 5.6,
     reaction: 0.22,
     pace: 1,
@@ -193,7 +194,7 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     returnReach: 0.45,
     readNoise: 0.32,
   },
-  ace: {
+  pro: {
     // As fast as the player (both sprint to 7 m/s): it wins on reading the ball, not on legs.
     speed: 6.0,
     reaction: 0.1,
@@ -207,5 +208,21 @@ export const AI_LEVELS: Record<Difficulty, AiSpec> = {
     returnError: 0.12,
     returnReach: 0.6,
     readNoise: 0.16,
+  },
+  champion: {
+    // The hardest: reads the ball almost perfectly, hits harder and closer to the lines,
+    // and hardly misses. Same legs as the player: it wins on anticipation.
+    speed: 6.0,
+    reaction: 0.06,
+    pace: 1.1,
+    grades: { perfect: 0.82, good: 0.17, early: 0.005, late: 0.005 },
+    readsOut: 0.99,
+    aimMargin: 0.75,
+    serveFirst: 0.86,
+    unforced: 0.022,
+    centre: 0.08,
+    returnError: 0.06,
+    returnReach: 0.7,
+    readNoise: 0.08,
   },
 }

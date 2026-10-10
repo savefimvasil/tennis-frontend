@@ -14,7 +14,7 @@ it.skipIf(!process.env.PROBE)(
   'serve outcomes per level',
   () => {
     const out: string[] = []
-    for (const level of ['easy', 'pro', 'ace'] as const) {
+    for (const level of ['beginner', 'easy', 'pro', 'champion'] as const) {
       const { ball } = buildWorld()
       sim.ball = ball
       const g = useGame.getState()

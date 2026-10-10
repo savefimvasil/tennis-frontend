@@ -120,6 +120,18 @@ interface GameStore {
 
 let seq = 1
 
+/**
+ * The levels were renamed (Club/Pro/Champion became Beginner/Easy/Pro, with a new Champion on
+ * top); a choice saved under the old names keeps the same opponent.
+ */
+function savedDifficulty(): Difficulty {
+  const levels: Difficulty[] = ['beginner', 'easy', 'pro', 'champion']
+  const current = saved<Difficulty | ''>('level', [...levels, ''], '')
+  if (current) return current
+  const old = saved<'easy' | 'pro' | 'ace' | ''>('difficulty', ['easy', 'pro', 'ace', ''], '')
+  return old === 'ace' ? 'pro' : old === 'pro' ? 'easy' : old === 'easy' ? 'beginner' : 'easy'
+}
+
 const SKIN_IDS = SKINS.map((s) => s.id)
 const initialSurface = saved<SurfaceId>('surface', ['hard', 'clay', 'grass'], 'hard')
 setSurface(initialSurface)
@@ -132,7 +144,7 @@ export const useGame = create<GameStore>((set, get) => ({
   screen: 'menu',
   mode: 'solo',
   opponentName: 'R. Okafor',
-  difficulty: saved('difficulty', ['easy', 'pro', 'ace'], 'pro'),
+  difficulty: savedDifficulty(),
   format: saved('format', Object.keys(FORMATS) as FormatId[], 'quick'),
   // Phones and tablets start on Low at 30 fps: they run hot and drain fast otherwise.
   quality: saved('quality', ['high', 'medium', 'low'], TOUCH ? 'low' : 'medium'),
@@ -155,7 +167,7 @@ export const useGame = create<GameStore>((set, get) => ({
     save('practiced', '1')
     st.start()
     set({
-      difficulty: 'easy',
+      difficulty: 'beginner',
       format: 'match',
       match: newMatch(FORMATS.match, 0),
       practice: { step: 0, count: 0, left: false, right: false, restore },
@@ -179,7 +191,7 @@ export const useGame = create<GameStore>((set, get) => ({
     set({ practice: next })
   },
   setDifficulty: (difficulty) => {
-    save('difficulty', difficulty)
+    save('level', difficulty)
     set({ difficulty })
   },
   setFormat: (format) => {

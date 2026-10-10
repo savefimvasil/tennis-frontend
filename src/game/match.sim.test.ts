@@ -9,7 +9,7 @@ import { useGame } from './store'
 // and a simple scripted bot standing in for the human player.
 
 describe('full match simulation', () => {
-  it.each(['easy', 'pro', 'ace'] as const)(
+  it.each(['beginner', 'easy', 'pro', 'champion'] as const)(
     'plays a quick match against %s to completion',
     (difficulty) => {
       const { ball } = buildWorld()

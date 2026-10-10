@@ -65,7 +65,7 @@ function levelFolder(d: Difficulty) {
       [`${d} help timing`]: { value: h.timing, min: 1, max: 2.5, step: 0.05, onChange: (v: number) => (h.timing = v) },
       [`${d} help reach`]: { value: h.reach, min: 1.2, max: 2.4, step: 0.05, onChange: (v: number) => (h.reach = v) },
     },
-    { collapsed: d !== 'easy' },
+    { collapsed: d !== 'beginner' },
   )
 }
 
@@ -133,7 +133,12 @@ export default function LabPanel() {
   )
   useControls(
     'Difficulty',
-    { easy: levelFolder('easy'), pro: levelFolder('pro'), ace: levelFolder('ace') },
+    {
+      beginner: levelFolder('beginner'),
+      easy: levelFolder('easy'),
+      pro: levelFolder('pro'),
+      champion: levelFolder('champion'),
+    },
     { collapsed: true },
   )
   return <Leva collapsed={false} titleBar={{ title: 'Physics Lab' }} />

@@ -4,10 +4,10 @@ import { useGame } from './store'
 describe('practice', () => {
   it('walks serve -> timing -> aim, then hands the player their settings back', () => {
     const g = () => useGame.getState()
-    g().setDifficulty('ace')
+    g().setDifficulty('champion')
     g().setFormat('quick')
     g().startPractice()
-    expect(g().difficulty).toBe('easy')
+    expect(g().difficulty).toBe('beginner')
     expect(g().practice?.step).toBe(0)
     g().practiceEvent({ kind: 'rallyIn', grade: 'perfect', x: 0 })
     expect(g().practice?.count).toBe(0)
@@ -24,7 +24,7 @@ describe('practice', () => {
     expect(g().practice?.step).toBe(3)
     g().start()
     expect(g().practice).toBeNull()
-    expect(g().difficulty).toBe('ace')
+    expect(g().difficulty).toBe('champion')
     expect(g().format).toBe('quick')
   })
 })

@@ -4,6 +4,7 @@ import {
   ArrowsClockwise,
   CellSignalFull,
   CellSignalLow,
+  CellSignalHigh,
   CellSignalMedium,
   GameController,
   Globe,
@@ -41,9 +42,15 @@ interface Option<T> {
 }
 
 const DIFFICULTIES: Option<Difficulty>[] = [
-  { id: 'easy', label: 'Club', note: 'Slow feet, loose timing', badge: <CellSignalLow weight="fill" /> },
-  { id: 'pro', label: 'Pro', note: 'Solid baseliner', badge: <CellSignalMedium weight="fill" /> },
-  { id: 'ace', label: 'Champion', note: 'Fast, rarely misses', badge: <CellSignalFull weight="fill" /> },
+  { id: 'beginner', label: 'Beginner', note: 'Slow feet, loose timing', badge: <CellSignalLow weight="fill" /> },
+  { id: 'easy', label: 'Easy', note: 'Steady club player', badge: <CellSignalMedium weight="fill" /> },
+  { id: 'pro', label: 'Pro', note: 'Fast, rarely misses', badge: <CellSignalHigh weight="fill" /> },
+  {
+    id: 'champion',
+    label: 'Champion',
+    note: 'Reads everything, hits the lines',
+    badge: <CellSignalFull weight="fill" />,
+  },
 ]
 
 const PACES: Option<PaceId>[] = [
