@@ -362,6 +362,8 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
     look: [0, 0] as [number, number],
     /** Weight of the serve-receiving stance. */
     receive: 0,
+    /** Foot planting, left and right: where a planted foot is pinned, and how firmly. */
+    feet: [0, 1].map(() => ({ locked: false, at: new THREE.Vector3(), w: 0, floor: 0.2, len: 0 })),
   })
 
   useFrame((clock, dtRaw) => {
@@ -552,6 +554,24 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
         styleSwing(target, a.swing, a.swingShot, t)
         // Hips lead the shoulders: part of the trunk rotation comes from the pelvis.
         pelvisTurnWant = tmpTrack.j.spine[1] * 0.45
+        // A wide ball: step out to it. The leg on the ball's side reaches out into a lunge
+        // and the hips turn further into the shot (+x is the athlete's left).
+        if (a.aim) {
+          const l = toLocal(a.aim.x - a.x, a.aim.z - a.z, a.yaw)
+          const reach = Math.max(0, Math.min(1, (Math.abs(l.x) - 0.9) / 0.6)) * w
+          if (reach > 0.01) {
+            const toLeft = l.x > 0
+            if (toLeft) {
+              target.j.lHip[2] += 0.38 * reach
+              target.j.lKnee[0] += 0.35 * reach
+            } else {
+              target.j.rHip[2] -= 0.38 * reach
+              target.j.rKnee[0] += 0.35 * reach
+            }
+            target.lift -= 0.07 * reach
+            pelvisTurnWant *= 1 + 0.4 * reach
+          }
+        }
         target.j.spine[1] -= pelvisTurnWant * 0.5
         // Load the legs in the take-back, drive up through contact.
         const load = bump(t, 0.1, 0.09)
@@ -642,6 +662,16 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       const joints = (jointMap.current ??= { ...jointObjects(refs), pelvis: pelvis.current })
       const b = body.current
       b.drive(joints, pose.lift)
+      plantFeet(
+        b,
+        joints,
+        pose.lift,
+        s.feet,
+        [refs.lHip, refs.lKnee, refs.lAnk],
+        [refs.rHip, refs.rKnee, refs.rAnk],
+        airborne,
+        dt,
+      )
       // Racket-arm IK: around contact, turn the shoulder so the string bed points at the
       // planned contact point, then pose the skeleton again with the correction.
       const w = a.aim ? aimWeight(a.swing, a.swingT) : 0
@@ -841,6 +871,8 @@ function ContactShadow() {
 }
 
 const ik = {
+  foot: new THREE.Vector3(),
+  hip: new THREE.Vector3(),
   dir: new THREE.Vector3(),
   target: new THREE.Vector3(),
   shoulder: new THREE.Vector3(),
@@ -852,6 +884,72 @@ const ik = {
   qw: new THREE.Quaternion(),
   world: new THREE.Quaternion(),
   parent: new THREE.Quaternion(),
+}
+
+type LegRefs = [React.RefObject<THREE.Group>, React.RefObject<THREE.Group>, React.RefObject<THREE.Group>]
+type FootState = { locked: boolean; at: THREE.Vector3; w: number; floor: number; len: number }
+
+/**
+ * Planted feet stay put. A foot that comes down (near the lowest it has been, body not in
+ * the air) is pinned where it landed; while pinned, the hip turns the leg toward that spot and
+ * the knee bends or straightens to reach it, so turning, braking and swinging no longer skate
+ * the feet over the court. The pin lets go when the pose lifts the foot or the body has moved
+ * too far from it (it then takes a step), easing in and out so nothing pops.
+ */
+function plantFeet(
+  b: RocketboxHandle,
+  joints: Parameters<RocketboxHandle['drive']>[0],
+  lift: number,
+  feet: FootState[],
+  left: LegRefs,
+  right: LegRefs,
+  airborne: number,
+  dt: number,
+) {
+  for (const leg of [0, 1] as const) {
+    const f = feet[leg]
+    const [hipR, kneeR, ankR] = leg === 0 ? left : right
+    b.foot(leg, ik.foot)
+    b.legHip(leg, ik.hip)
+    // Leg length: the longest hip-to-ankle span seen (a straight leg).
+    f.len = Math.max(f.len, ik.foot.distanceTo(ik.hip))
+    // The lowest the ankle gets is standing on the court; it creeps back up in case the floor moved.
+    f.floor = ik.foot.y < f.floor ? ik.foot.y : f.floor + dt * 0.02
+    const down = airborne < 0.05 && ik.foot.y < f.floor + 0.035
+    if (down && !f.locked && f.w < 0.05) {
+      f.locked = true
+      f.at.copy(ik.foot)
+    }
+    // Let go when the pose lifts the foot, the body has moved on, or the spot is out of the leg's
+    // comfortable range (too far to reach, or so close the knee would fold up).
+    const span = Math.hypot(f.at.x - ik.hip.x, ik.foot.y - ik.hip.y, f.at.z - ik.hip.z)
+    if (
+      f.locked &&
+      (!down || Math.hypot(ik.foot.x - f.at.x, ik.foot.z - f.at.z) > 0.25 || span > f.len * 0.995 || span < f.len * 0.6)
+    )
+      f.locked = false
+    f.w += ((f.locked ? 1 : 0) - f.w) * approach(f.locked ? 20 : 9, dt)
+    if (f.w < 0.01) continue
+    for (let pass = 0; pass < 2; pass++) {
+      b.legHip(leg, ik.hip)
+      b.foot(leg, ik.foot)
+      ik.target.set(ik.foot.x + (f.at.x - ik.foot.x) * f.w, ik.foot.y, ik.foot.z + (f.at.z - ik.foot.z) * f.w)
+      // Swing the whole leg from the hip toward the pinned spot...
+      ik.from.subVectors(ik.foot, ik.hip).normalize()
+      ik.to.subVectors(ik.target, ik.hip).normalize()
+      ik.q.setFromUnitVectors(ik.from, ik.to)
+      const hip = hipR.current!
+      hip.getWorldQuaternion(ik.world).premultiply(ik.q)
+      hip.parent!.getWorldQuaternion(ik.parent)
+      hip.quaternion.copy(ik.parent.invert().multiply(ik.world))
+      // ...and fold or unfold the knee for the distance, keeping the sole flat.
+      const error = ik.foot.distanceTo(ik.hip) - ik.target.distanceTo(ik.hip)
+      const knee = kneeR.current!
+      knee.rotation.x = Math.max(0, Math.min(1.6, knee.rotation.x + error * 2.5))
+      ankR.current!.rotation.x = -(hip.rotation.x + knee.rotation.x)
+      b.drive(joints, lift)
+    }
+  }
 }
 
 /** IK blend around the contact key: groundstrokes meet the ball at 0.2 s, the serve at 1.0 s. */

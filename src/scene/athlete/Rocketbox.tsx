@@ -73,6 +73,9 @@ export interface RocketboxHandle {
   /** World positions of the free arm's shoulder and hand. */
   leftShoulder(out: THREE.Vector3): THREE.Vector3
   leftHand(out: THREE.Vector3): THREE.Vector3
+  /** World positions of a leg's hip joint (thigh root) and ankle (foot bone): 0 left, 1 right. */
+  legHip(leg: 0 | 1, out: THREE.Vector3): THREE.Vector3
+  foot(leg: 0 | 1, out: THREE.Vector3): THREE.Vector3
 }
 
 /** String-bed centre in racket-local space (see Racket.tsx: head at -0.47 under a +0.06 offset). */
@@ -338,9 +341,13 @@ export function RocketboxBody({
     const shoulderBone = scene.getObjectByName('Bip01_R_UpperArm')!
     const leftShoulderBone = scene.getObjectByName('Bip01_L_UpperArm')!
     const leftHandBone = scene.getObjectByName('Bip01_L_Hand')!
+    const thighBones = [scene.getObjectByName('Bip01_L_Thigh')!, scene.getObjectByName('Bip01_R_Thigh')!] as const
+    const footBones = [scene.getObjectByName('Bip01_L_Foot')!, scene.getObjectByName('Bip01_R_Foot')!] as const
     return {
       leftShoulderBone,
       leftHandBone,
+      thighBones,
+      footBones,
       scene,
       driven,
       hips,
@@ -416,6 +423,12 @@ export function RocketboxBody({
       },
       leftHand(out) {
         return rig.leftHandBone.getWorldPosition(out)
+      },
+      legHip(leg, out) {
+        return rig.thighBones[leg].getWorldPosition(out)
+      },
+      foot(leg, out) {
+        return rig.footBones[leg].getWorldPosition(out)
       },
     }),
     [rig],
