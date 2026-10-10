@@ -7,7 +7,7 @@ camera only ever sees the inside of the enclosure, the sky and a few tree tops.
 
 | Surface | Venue | File |
 | --- | --- | --- |
-| Hard | Indoor hall under a timber gridshell: a diagonal glulam lattice over a white membrane that glows with daylight, a wood-panelled wall with a band of open windows onto a lawn and trees, arched end walls of translucent panels between timber mullions. The light comes from high above, so the lattice casts its diamond shadow pattern onto the court. | `src/scene/Hall.tsx` |
+| Hard | Indoor hall under a timber gridshell, in the evening: a diagonal glulam lattice over a white membrane, two rows of LED floodlights hung on cables below it, a wood-panelled wall with a band of open windows onto a dark lawn and trees under a blue-hour sky (`DuskSky` in `Lighting.tsx`, with a few stars), arched end walls of translucent panels between timber mullions. The key light is near-vertical and soft, so player shadows are short and faint and nothing stripes the court: easier to read the ball. | `src/scene/Hall.tsx` |
 | Grass | Garden court: club fence and windscreen, a lawn, a tall clipped hedge, a white weatherboard pavilion with a green gable roof and clock, broadleaf trees and umbrella pines over the hedge. | `src/scene/OutdoorVenues.tsx` |
 | Clay | Mediterranean courtyard: club fence and windscreen, ochre stucco walls with arches and terracotta coping, bougainvillea spilling over them, cypresses and umbrella pines beyond. | `src/scene/OutdoorVenues.tsx` |
 

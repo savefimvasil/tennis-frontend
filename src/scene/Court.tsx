@@ -157,8 +157,8 @@ function Surfaces({ m }: { m: SurfaceMaterials }) {
   const lines = useMemo(linesGeometry, [])
   return (
     <>
-      {/* Run-off */}
-      <mesh rotation-x={-Math.PI / 2} position-y={0} receiveShadow>
+      {/* Run-off, a few mm below the playing area so the two never depth-fight far away */}
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.004} receiveShadow>
         <planeGeometry args={[COURT.fenceX * 2, COURT.fenceZ * 2]} />
         <primitive object={m.outer} attach="material" />
       </mesh>

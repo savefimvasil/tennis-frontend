@@ -6,10 +6,10 @@ import { Trees } from './Trees'
 import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { glulam, membrane, planks as plankSet, repeated } from './proceduralMaterials'
 
-// An indoor court under a timber gridshell: glulam lattice over a white membrane that lets
-// the daylight through, a low wall of wood panels with a band of open windows onto a lawn and real trees, and
-// arched end walls of translucent panels between timber mullions. Everything the camera can
-// see is inside: no outdoor world to draw.
+// An indoor court under a timber gridshell, in the evening: glulam lattice over a white
+// membrane, rows of floodlights hung below it, a low wall of wood panels with a band of open
+// windows onto a lawn and trees at dusk, and arched end walls of translucent panels between
+// timber mullions. The light comes from many fittings overhead, so shadows are short and soft.
 
 /** Inner wall faces sit just outside the ball's fence colliders. */
 const WX = COURT.fenceX + 0.1
@@ -137,18 +137,18 @@ function Vault() {
   }, [members])
   return (
     <group>
-      {/* Daylight through the membrane: the ceiling glows softly. */}
+      {/* Evening: the membrane is lit from below by the floodlights, a faint warm glow. */}
       <mesh geometry={geo}>
         <meshStandardMaterial
           {...cloth}
           color="#f6f3ec"
-          emissive="#fffaf0"
-          emissiveIntensity={0.5}
+          emissive="#ffe8c8"
+          emissiveIntensity={0.12}
           side={THREE.DoubleSide}
         />
       </mesh>
-      {/* The lattice casts its diamond shadow pattern onto the court. */}
-      <instancedMesh ref={lattice} args={[undefined, undefined, members.length]} castShadow>
+      {/* The floodlights hang below the lattice, so it casts no shadow onto the court. */}
+      <instancedMesh ref={lattice} args={[undefined, undefined, members.length]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial {...wood} />
       </instancedMesh>
@@ -249,11 +249,75 @@ function EndWall({ z }: { z: number }) {
   return (
     <group position-z={z} rotation-y={facing}>
       <mesh geometry={geo}>
-        <meshStandardMaterial {...panel} color="#f8f6f0" emissive="#fffbf2" emissiveIntensity={0.7} />
+        {/* Translucent panels with the dusk behind them. */}
+        <meshStandardMaterial {...panel} color="#8d97ad" emissive="#3b4f7a" emissiveIntensity={0.55} />
       </mesh>
-      <instancedMesh ref={posts} args={[undefined, undefined, xs.length + 1]} castShadow>
+      <instancedMesh ref={posts} args={[undefined, undefined, xs.length + 1]}>
         <boxGeometry args={[0.16, 1, 0.16]} />
         <meshStandardMaterial {...glulam(3)} />
+      </instancedMesh>
+    </group>
+  )
+}
+
+// ------------------------------------------------------------------ floodlights
+
+/** Rows of LED floodlights hung on cables under the vault, either side of the court. */
+const LAMP_X = [-5.2, 5.2]
+const LAMP_Z = [-14, -8.4, -2.8, 2.8, 8.4, 14]
+/** Brighter than white so the lit faces bloom on High. */
+const LAMP_GLOW = new THREE.Color('#fff2dc').multiplyScalar(4)
+
+function Floodlights() {
+  const housings = useRef<THREE.InstancedMesh>(null!)
+  const faces = useRef<THREE.InstancedMesh>(null!)
+  const cables = useRef<THREE.InstancedMesh>(null!)
+  const lamps = useMemo(
+    () =>
+      LAMP_X.flatMap((x) =>
+        LAMP_Z.map((z) => {
+          const roof = CY + Math.sqrt(R * R - x * x)
+          return { x, z, y: roof - 1.6, roof }
+        }),
+      ),
+    [],
+  )
+  useLayoutEffect(() => {
+    const o = new THREE.Object3D()
+    lamps.forEach(({ x, y, z, roof }, i) => {
+      o.position.set(x, y, z)
+      o.scale.set(1, 1, 1)
+      o.updateMatrix()
+      housings.current.setMatrixAt(i, o.matrix)
+      o.position.set(x, y - 0.081, z)
+      o.updateMatrix()
+      faces.current.setMatrixAt(i, o.matrix)
+      // Two hanger cables per fitting, up to the lattice.
+      for (const k of [0, 1]) {
+        o.position.set(x + (k ? 0.5 : -0.5), (y + roof) / 2, z)
+        o.scale.set(1, roof - y, 1)
+        o.updateMatrix()
+        cables.current.setMatrixAt(i * 2 + k, o.matrix)
+      }
+    })
+    for (const m of [housings.current, faces.current, cables.current]) {
+      m.instanceMatrix.needsUpdate = true
+      m.computeBoundingSphere()
+    }
+  }, [lamps])
+  return (
+    <group>
+      <instancedMesh ref={housings} args={[undefined, undefined, lamps.length]}>
+        <boxGeometry args={[1.3, 0.16, 0.42]} />
+        <meshStandardMaterial color="#2c2f33" metalness={0.6} roughness={0.4} />
+      </instancedMesh>
+      <instancedMesh ref={faces} args={[undefined, undefined, lamps.length]}>
+        <boxGeometry args={[1.18, 0.01, 0.32]} />
+        <meshBasicMaterial color={LAMP_GLOW} toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={cables} args={[undefined, undefined, lamps.length * 2]}>
+        <cylinderGeometry args={[0.008, 0.008, 1, 4]} />
+        <meshBasicMaterial color="#1c1c1c" />
       </instancedMesh>
     </group>
   )
@@ -267,19 +331,20 @@ export function Hall({ detail }: { detail: 'high' | 'medium' | 'low' }) {
   return (
     <group>
       <Vault />
+      <Floodlights />
       <WallRun length={WZ * 2} position={[WX, 0, 0]} rotationY={-Math.PI / 2} />
       <WallRun length={WZ * 2} position={[-WX, 0, 0]} rotationY={Math.PI / 2} />
       <WallRun length={WX * 2} position={[0, 0, -WZ]} rotationY={0} />
       <WallRun length={WX * 2} position={[0, 0, WZ]} rotationY={Math.PI} />
-      {/* Outside the windows: a lawn and a ring of trees under the real sky. */}
+      {/* Outside the windows: a lawn and a ring of trees under the dusk sky. */}
       <mesh rotation-x={-Math.PI / 2} position-y={-0.03}>
         <planeGeometry args={[(WX + 24) * 2, (WZ + 24) * 2]} />
-        <WithFallback fallback={<meshStandardMaterial color="#6f9a4c" roughness={1} />}>
-          <PbrMaterial set="court/grass" repeat={[(WX + 24) / 1.1, (WZ + 24) / 1.1]} color="#7aa357" roughness={1} />
+        <WithFallback fallback={<meshStandardMaterial color="#1f2c22" roughness={1} />}>
+          <PbrMaterial set="court/grass" repeat={[(WX + 24) / 1.1, (WZ + 24) / 1.1]} color="#2c3d2e" roughness={1} />
         </WithFallback>
       </mesh>
-      <Trees kind="round" spots={trees} seed={5} />
-      <Trees kind="conifer" spots={conifers} seed={6} />
+      <Trees kind="round" spots={trees} seed={5} dim={0.32} />
+      <Trees kind="conifer" spots={conifers} seed={6} dim={0.3} />
       <EndWall z={-WZ} />
       <EndWall z={WZ} />
       <PlayerBenches />

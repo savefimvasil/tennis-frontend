@@ -1,4 +1,4 @@
-import { Suspense, useLayoutEffect, useRef } from 'react'
+import { Suspense, useLayoutEffect, useMemo, useRef } from 'react'
 import { suspend } from 'suspend-react'
 import { Environment, Lightformer, Sky, useEnvironment, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
@@ -19,13 +19,20 @@ export const SUN_DIR = HDRI_SUN.clone()
 
 const SKY_FILES = ['sky.webp', 'sky-gain.webp', 'sky.json'].map((f) => `${import.meta.env.BASE_URL}textures/sky/${f}`)
 
-/** Indoors the light comes down through the membrane: high, white, soft. */
-const INDOOR_SUN = new THREE.Vector3(0.25, 1, 0.45).normalize()
+/**
+ * The evening hall: the key light is the floodlight rows straight overhead (one near-vertical
+ * directional light standing in for them), so player shadows are short and faint.
+ */
+const LAMPS_DIR = new THREE.Vector3(0.06, 1, 0.1).normalize()
 
 export function Lighting({ shadowSize, indoor = false }: { shadowSize: number; indoor?: boolean }) {
-  const sun = useRef<THREE.DirectionalLight>(null!)
+  return indoor ? <EveningHall shadowSize={shadowSize} /> : <Daylight shadowSize={shadowSize} />
+}
+
+function useShadowFrustum() {
+  const light = useRef<THREE.DirectionalLight>(null!)
   useLayoutEffect(() => {
-    const cam = sun.current.shadow.camera
+    const cam = light.current.shadow.camera
     cam.left = -24
     cam.right = 24
     cam.top = 27
@@ -34,18 +41,102 @@ export function Lighting({ shadowSize, indoor = false }: { shadowSize: number; i
     cam.far = 140
     cam.updateProjectionMatrix()
   }, [])
+  return light
+}
 
-  const sunPos = (indoor ? INDOOR_SUN : SUN_DIR).clone().multiplyScalar(70)
+/** Dusk outside, floodlights inside: soft even light, faint short shadows, a blue-hour sky. */
+function EveningHall({ shadowSize }: { shadowSize: number }) {
+  const lamps = useShadowFrustum()
+  return (
+    <>
+      <color attach="background" args={['#101a33']} />
+      <fog attach="fog" args={['#18233f', 40, 110]} />
+      <DuskSky />
+      {/* Floodlight bounce: warm from above, the court's own colour back from below. */}
+      <hemisphereLight args={['#fff1dc', '#3a3633', 1.5]} />
+      <directionalLight
+        ref={lamps}
+        position={LAMPS_DIR.clone().multiplyScalar(70).toArray()}
+        intensity={1.5}
+        color="#fff3e2"
+        castShadow
+        shadow-mapSize={[shadowSize, shadowSize]}
+        shadow-bias={-0.0002}
+        shadow-normalBias={0.03}
+        shadow-radius={4}
+      />
+      {/* Reflections: the rows of fittings overhead, a dark room around them. */}
+      <Environment resolution={128} frames={1} environmentIntensity={0.5}>
+        <color attach="background" args={['#1a1f2b']} />
+        {[-5.2, 5.2].map((x) => (
+          <Lightformer
+            key={x}
+            form="rect"
+            intensity={5}
+            color="#fff0d8"
+            scale={[1.2, 32, 1]}
+            position={[x, 9, 0]}
+            rotation-x={Math.PI / 2}
+          />
+        ))}
+        <Lightformer form="rect" intensity={0.5} color="#c99a63" scale={[60, 3, 1]} position={[0, 1.5, -20]} />
+      </Environment>
+    </>
+  )
+}
+
+/** Blue hour: deep blue overhead, a last warm band on the horizon, a few early stars. */
+function DuskSky() {
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        side: THREE.BackSide,
+        depthWrite: false,
+        fog: false,
+        vertexShader: `varying vec3 vDir;
+          void main() {
+            vDir = normalize(position);
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }`,
+        fragmentShader: `varying vec3 vDir;
+          float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+          void main() {
+            float h = max(vDir.y, 0.0);
+            vec3 zenith = vec3(0.035, 0.06, 0.15);
+            vec3 horizon = vec3(0.16, 0.22, 0.4);
+            vec3 col = mix(horizon, zenith, pow(h, 0.55));
+            // The afterglow, strongest toward the west (-x).
+            float glow = exp(-h * 9.0) * (0.55 + 0.45 * max(-vDir.x, 0.0));
+            col += vec3(0.5, 0.26, 0.16) * glow * 0.55;
+            vec3 cell = floor(vDir * 260.0);
+            float star = step(0.9985, hash(cell)) * smoothstep(0.15, 0.5, h);
+            col += star * 0.8;
+            gl_FragColor = vec4(col, 1.0);
+            #include <colorspace_fragment>
+          }`,
+      }),
+    [],
+  )
+  return (
+    <mesh material={mat} renderOrder={-1} frustumCulled={false}>
+      <sphereGeometry args={[150, 32, 16]} />
+    </mesh>
+  )
+}
+
+function Daylight({ shadowSize }: { shadowSize: number }) {
+  const sun = useShadowFrustum()
+  const sunPos = SUN_DIR.clone().multiplyScalar(70)
   return (
     <>
       <color attach="background" args={['#e6d9c6']} />
       <fog attach="fog" args={[FOG, 70, 460]} />
-      <hemisphereLight args={indoor ? ['#fffaf2', '#a8946f', 1.5] : ['#b9cde6', '#6b5c42', 0.8]} />
+      <hemisphereLight args={['#b9cde6', '#6b5c42', 0.8]} />
       <directionalLight
         ref={sun}
         position={sunPos.toArray()}
-        intensity={indoor ? 2.2 : 3.6}
-        color={indoor ? '#fff4e6' : '#ffd2a0'}
+        intensity={3.6}
+        color="#ffd2a0"
         castShadow
         shadow-mapSize={[shadowSize, shadowSize]}
         shadow-bias={-0.0002}

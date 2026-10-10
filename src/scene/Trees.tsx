@@ -76,12 +76,14 @@ function Variant({
   spots,
   seed,
   tone,
+  dim,
 }: {
   geometry: THREE.BufferGeometry
   mat: THREE.Material
   spots: (TreeSpot & { w: number; yaw: number; tint: number })[]
   seed: number
   tone: number
+  dim: number
 }) {
   const mesh = useRef<THREE.InstancedMesh>(null!)
   const leafy = (mat as THREE.MeshStandardMaterial).alphaTest > 0
@@ -96,16 +98,17 @@ function Variant({
       mesh.current.setMatrixAt(i, dummy.matrix)
       // Leaves: each tree a slightly different green, some warmer, some darker.
       if (leafy)
-        mesh.current.setColorAt(i, c.setHSL(0.02 * (s.tint - 0.5), 0.12 * s.tint, (0.82 + s.tint * 0.22) * tone))
+        mesh.current.setColorAt(i, c.setHSL(0.02 * (s.tint - 0.5), 0.12 * s.tint, (0.82 + s.tint * 0.22) * tone * dim))
+      else if (dim < 1) mesh.current.setColorAt(i, c.setScalar(dim))
     })
     mesh.current.instanceMatrix.needsUpdate = true
     if (mesh.current.instanceColor) mesh.current.instanceColor.needsUpdate = true
     mesh.current.computeBoundingSphere()
-  }, [spots, seed, leafy, tone])
+  }, [spots, seed, leafy, tone, dim])
   return <instancedMesh ref={mesh} args={[geometry, mat, spots.length]} frustumCulled />
 }
 
-function RealTrees({ kind, spots, seed }: { kind: RealTreeKind; spots: TreeSpot[]; seed: number }) {
+function RealTrees({ kind, spots, seed, dim }: { kind: RealTreeKind; spots: TreeSpot[]; seed: number; dim: number }) {
   const { nodes } = useGLTF(MODEL) as unknown as { nodes: Record<string, THREE.Mesh> }
   const tex = useTexture(TEXTURES) as Tex
   const groups = useMemo(() => {
@@ -132,6 +135,7 @@ function RealTrees({ kind, spots, seed }: { kind: RealTreeKind; spots: TreeSpot[
               spots={list}
               seed={seed + i}
               tone={LEAF_TONE[kind]}
+              dim={dim}
             />
           )
         }),
@@ -141,12 +145,23 @@ function RealTrees({ kind, spots, seed }: { kind: RealTreeKind; spots: TreeSpot[
 }
 
 /** A band of real trees, with primitive crowns while they load (and on Low quality). */
-export function Trees({ kind, spots, seed = 3 }: { kind: RealTreeKind; spots: TreeSpot[]; seed?: number }) {
+export function Trees({
+  kind,
+  spots,
+  seed = 3,
+  dim = 1,
+}: {
+  kind: RealTreeKind
+  spots: TreeSpot[]
+  seed?: number
+  /** Darkens the trees (e.g. outside at dusk, where the scene's lights do not reach). */
+  dim?: number
+}) {
   const low = useGame((s) => s.quality === 'low')
   if (low) return <TreeClump kind={FALLBACK[kind]} spots={spots} seed={seed} />
   return (
     <WithFallback fallback={<TreeClump kind={FALLBACK[kind]} spots={spots} seed={seed} />}>
-      <RealTrees kind={kind} spots={spots} seed={seed} />
+      <RealTrees kind={kind} spots={spots} seed={seed} dim={dim} />
     </WithFallback>
   )
 }
