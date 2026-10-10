@@ -40,10 +40,11 @@ export const READY: Pose = makePose({
   j: {
     spine: [0.28, 0, 0],
     neck: [-0.22, 0, 0],
-    rSh: [-0.45, 0.1, -0.18],
+    // Elbows out from the body, so the arms read from behind (the game camera).
+    rSh: [-0.45, 0.3, -0.45],
     rEl: [-1.25, 0, 0],
     rWr: [0.3, 0, 0.9],
-    lSh: [-0.5, -0.1, 0.32],
+    lSh: [-0.5, -0.3, 0.6],
     lEl: [-1.25, 0, 0],
     lHip: [-0.45, 0, 0.06],
     rHip: [-0.45, 0, -0.06],
@@ -167,10 +168,10 @@ export const RECEIVE: Pose = makePose(
     j: {
       spine: [0.55, 0, 0],
       neck: [-0.48, 0, 0],
-      rSh: [-0.85, 0.2, 0.18],
+      rSh: [-0.85, 0.35, -0.3],
       rEl: [-1.3, 0, 0],
       rWr: [0.35, 0, 1.05],
-      lSh: [-0.8, -0.1, 0.22],
+      lSh: [-0.8, -0.3, 0.55],
       lEl: [-1.3, 0, 0],
       lHip: [-0.78, 0, 0.27],
       rHip: [-0.78, 0, -0.27],

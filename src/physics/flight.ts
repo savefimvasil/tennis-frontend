@@ -283,7 +283,7 @@ export interface ShotRequest {
   spin: number
   /** Minimum clearance over the net tape (m). */
   netClearance: number
-  /** Lob mode: fixes the launch angle and solves for speed instead. */
+  /** Fixed launch angle (lob, slice): solves for speed instead, raised only to clear the net. */
   lobPitch?: number
   /** Spin about the vertical axis (rad/s): positive curves the ball to its left. */
   sidespin?: number
@@ -347,14 +347,23 @@ function solveOnce(req: ShotRequest): ShotSolution {
   const goal = Math.hypot(req.target.x - req.from.x, req.target.z - req.from.z)
 
   if (req.lobPitch !== undefined) {
-    let lo = 4
-    let hi = 45
-    for (let i = 0; i < 24 && hi - lo > 0.01; i++) {
-      const mid = (lo + hi) / 2
-      if (carry(req, mid, req.lobPitch).dist < goal) lo = mid
-      else hi = mid
+    // Fixed launch angle (lob, slice): solve the speed for the distance, raising the angle
+    // a little at a time if that line would not clear the net.
+    let pitch = req.lobPitch
+    let speed = 4
+    for (let attempt = 0; attempt < 12; attempt++) {
+      let lo = 4
+      let hi = 45
+      for (let i = 0; i < 24 && hi - lo > 0.01; i++) {
+        const mid = (lo + hi) / 2
+        if (carry(req, mid, pitch).dist < goal) lo = mid
+        else hi = mid
+      }
+      speed = (lo + hi) / 2
+      if (clearsNet(req, carry(req, speed, pitch).flight)) break
+      pitch += 0.025
     }
-    return finish(req, (lo + hi) / 2, req.lobPitch)
+    return finish(req, speed, pitch)
   }
 
   let speed = req.speed

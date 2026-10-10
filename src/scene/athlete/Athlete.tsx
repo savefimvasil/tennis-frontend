@@ -225,6 +225,48 @@ function rateFor(j: Joint, swinging: boolean): number {
   return swinging ? 40 : 16
 }
 
+/**
+ * Shapes the stroke for the shot type, on top of the shared track (contact stays where the
+ * racket IK puts it):
+ * - topspin: the racket drops below the ball and finishes high over the shoulder;
+ * - slice: high take-back, high-to-low with an open face, finishing low out in front; the
+ *   backhand slice is one-handed, the free arm opening back for balance;
+ * - flat: a level swing finishing across the body at shoulder height;
+ * - lob: an open face lifting up, finishing high.
+ */
+function styleSwing(target: Pose, swing: string, shot: string, t: number) {
+  const back = bump(t, 0.12, 0.13)
+  const follow = smoothstep(0.22, 0.4, t) * (1 - smoothstep(0.5, 0.72, t))
+  const j = target.j
+  const fh = swing === 'forehand'
+  if (shot === 'topspin') {
+    j.rSh[0] += 0.28 * back - 0.25 * follow
+    j.rEl[0] -= 0.2 * follow
+  } else if (shot === 'slice') {
+    j.rSh[0] += -0.7 * back + 0.95 * follow
+    j.rEl[0] += 0.3 * back + 1.1 * follow
+    j.rWr[0] -= 0.5 * follow
+    if (fh) {
+      j.rSh[2] -= 0.25 * back
+      j.spine[1] -= 0.4 * follow
+    } else {
+      // Stay side-on through a one-handed slice; the free arm opens back.
+      j.spine[1] += 0.6 * follow
+      const open = smoothstep(0.14, 0.3, t) * (1 - smoothstep(0.55, 0.72, t))
+      j.lSh[0] += (0.55 - j.lSh[0]) * open
+      j.lSh[2] += (0.7 - j.lSh[2]) * open
+      j.lEl[0] += (-0.25 - j.lEl[0]) * open
+    }
+  } else if (shot === 'flat') {
+    j.rSh[0] += 0.45 * follow
+    j.rEl[0] += 0.55 * follow
+    j.spine[1] += (fh ? 0.2 : -0.2) * follow
+  } else if (shot === 'lob') {
+    j.rSh[0] -= 0.4 * follow
+    j.rWr[0] -= 0.45 * smoothstep(0.15, 0.3, t)
+  }
+}
+
 /** Smooth bump centred on c with half-width w. */
 function bump(t: number, c: number, w: number): number {
   const u = 1 - Math.abs(t - c) / w
@@ -479,6 +521,7 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
           target.j.rSh[2] += dy * 0.55 * w
           target.j.lSh[2] += dy * 0.55 * w
         }
+        styleSwing(target, a.swing, a.swingShot, t)
         // Hips lead the shoulders: part of the trunk rotation comes from the pelvis.
         pelvisTurnWant = tmpTrack.j.spine[1] * 0.45
         target.j.spine[1] -= pelvisTurnWant * 0.5
@@ -609,7 +652,7 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       }
       // Free hand: cradles the racket throat in the ready stance and holds the grip on the
       // two-handed backhand, letting go for the run and the follow-through.
-      const lw = freeHandWeight(a.swing, a.swingT, s.prepSide, s.prep, speed)
+      const lw = freeHandWeight(a.swing, a.swingT, a.swingShot, s.prepSide, s.prep, speed)
       if (lw > 0.01) {
         const lSh = refs.lSh.current
         const lEl = refs.lEl.current
@@ -717,7 +760,9 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
  * How firmly the free hand holds the racket: on the throat in the ready stance (not while
  * running), on the grip through a two-handed backhand until the follow-through.
  */
-function freeHandWeight(swing: string, t: number, prepSide: string, prep: number, speed: number): number {
+function freeHandWeight(swing: string, t: number, shot: string, prepSide: string, prep: number, speed: number): number {
+  // The backhand slice is one-handed: the free hand lets go after the take-back.
+  if (swing === 'backhand' && shot === 'slice') return t < 0.08 ? 1 : Math.max(0, 1 - (t - 0.08) / 0.08)
   if (swing === 'backhand') return t < 0.42 ? 1 : Math.max(0, 1 - (t - 0.42) / 0.14)
   if (swing !== 'none') return 0
   if (prepSide === 'backhand' && prep > 0) return Math.min(1, prep * 2)
