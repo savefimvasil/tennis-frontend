@@ -1,5 +1,28 @@
 # Graphics: where the detail comes from, and what is next
 
+## Venues (current)
+
+Each surface has its own small, closed venue, so there is no wide world to draw: the
+camera only ever sees the inside of the enclosure, the sky and a few tree tops.
+
+| Surface | Venue | File |
+| --- | --- | --- |
+| Hard | Indoor hall under a timber gridshell: a diagonal glulam lattice over a white membrane that glows with daylight, a wood-panelled wall with a band of windows onto trees, arched end walls of translucent panels between timber mullions. The light comes from high above, so the lattice casts its diamond shadow pattern onto the court. | `src/scene/Hall.tsx` |
+| Grass | Garden court: club fence and windscreen, a lawn, a tall clipped hedge, a white weatherboard pavilion with a green gable roof and clock, broadleaf trees and umbrella pines over the hedge. | `src/scene/OutdoorVenues.tsx` |
+| Clay | Mediterranean courtyard: club fence and windscreen, ochre stucco walls with arches and terracotta coping, bougainvillea spilling over them, cypresses and umbrella pines beyond. | `src/scene/OutdoorVenues.tsx` |
+
+All three have the players' benches and a bench of about ten spectators sitting together
+(real posed avatars, `Spectators.tsx`). Shared pieces live in `VenueParts.tsx`.
+
+**Materials.** Photo-scanned CC0 sets where the library has them (stucco, roof tiles,
+paving, grass, the courts) and procedural PBR sets for the rest (`proceduralMaterials.ts`):
+glulam with laminations, glue lines and growth rings; oak or painted planks; the woven
+membrane. Each comes with colour, normal and roughness maps, generated once at load.
+Ambient occlusion now runs on Medium as well as High.
+
+The sections below describe the earlier outdoor stadium venue (removed; it is in the git
+history) and stay for reference.
+
 ## Audit (before this pass)
 
 Screenshots from the gameplay camera, the net, the stands and a wide orbit.

@@ -19,7 +19,10 @@ export const SUN_DIR = HDRI_SUN.clone()
 
 const SKY_FILES = ['sky.webp', 'sky-gain.webp', 'sky.json'].map((f) => `${import.meta.env.BASE_URL}textures/sky/${f}`)
 
-export function Lighting({ shadowSize }: { shadowSize: number }) {
+/** Indoors the light comes down through the membrane: high, white, soft. */
+const INDOOR_SUN = new THREE.Vector3(0.25, 1, 0.45).normalize()
+
+export function Lighting({ shadowSize, indoor = false }: { shadowSize: number; indoor?: boolean }) {
   const sun = useRef<THREE.DirectionalLight>(null!)
   useLayoutEffect(() => {
     const cam = sun.current.shadow.camera
@@ -32,17 +35,17 @@ export function Lighting({ shadowSize }: { shadowSize: number }) {
     cam.updateProjectionMatrix()
   }, [])
 
-  const sunPos = SUN_DIR.clone().multiplyScalar(70)
+  const sunPos = (indoor ? INDOOR_SUN : SUN_DIR).clone().multiplyScalar(70)
   return (
     <>
       <color attach="background" args={['#e6d9c6']} />
       <fog attach="fog" args={[FOG, 70, 460]} />
-      <hemisphereLight args={['#b9cde6', '#6b5c42', 0.8]} />
+      <hemisphereLight args={indoor ? ['#fffaf2', '#a8946f', 1.5] : ['#b9cde6', '#6b5c42', 0.8]} />
       <directionalLight
         ref={sun}
         position={sunPos.toArray()}
-        intensity={3.6}
-        color="#ffd2a0"
+        intensity={indoor ? 2.2 : 3.6}
+        color={indoor ? '#fff4e6' : '#ffd2a0'}
         castShadow
         shadow-mapSize={[shadowSize, shadowSize]}
         shadow-bias={-0.0002}

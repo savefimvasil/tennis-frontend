@@ -20,6 +20,18 @@ export function Effects({ quality }: { quality: Quality }) {
       </EffectComposer>
     )
   }
+  if (quality === 'medium') {
+    // Ambient occlusion seats things in the small venues (benches, wall feet, the lattice).
+    return (
+      <EffectComposer multisampling={0}>
+        <N8AO halfRes quality="performance" aoRadius={0.9} distanceFalloff={0.5} intensity={1.8} color="#1d2630" />
+        <ToneMapping mode={ToneMappingMode.AGX} />
+        <HueSaturation saturation={0.14} />
+        <SMAA />
+        <Vignette offset={0.28} darkness={0.4} />
+      </EffectComposer>
+    )
+  }
   return (
     <EffectComposer multisampling={0}>
       <ToneMapping mode={ToneMappingMode.AGX} />

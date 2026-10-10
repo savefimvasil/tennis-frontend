@@ -70,8 +70,8 @@ const FPS_OPTIONS: Option<'60' | '30'>[] = [
 ]
 
 const QUALITIES: Option<'high' | 'medium' | 'low'>[] = [
-  { id: 'high', label: 'High', note: 'AO, bloom, full crowd' },
-  { id: 'medium', label: 'Medium', note: 'Lighter effects' },
+  { id: 'high', label: 'High', note: 'AO, bloom, sharper shadows' },
+  { id: 'medium', label: 'Medium', note: 'AO, lighter effects' },
   { id: 'low', label: 'Low', note: 'Laptops, older GPUs' },
 ]
 

@@ -22,7 +22,8 @@ export function CameraRig() {
     const c = current.current
     if (screen === 'menu' || screen === 'online' || screen === 'over') {
       const t = state.clock.elapsedTime * 0.05
-      pos.set(Math.sin(t) * 24, 7.5 + Math.sin(t * 2) * 1.5, Math.cos(t) * 30)
+      // A slow orbit inside the venue (the hall's walls are just outside the fence).
+      pos.set(Math.sin(t) * 9.5, 5 + Math.sin(t * 2) * 0.8, Math.cos(t) * 17)
       look.set(0, 0.5, 0)
     } else {
       const a = sim.athletes[0]
