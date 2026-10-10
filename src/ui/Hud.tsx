@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { sim } from '../game/sim'
 import { AnimatePresence, motion } from 'motion/react'
 import { Fire, Gauge, Pause, SpeakerHigh, SpeakerSlash, TennisBall, Wind } from '@phosphor-icons/react'
 import { useGame, hudLive } from '../game/store'
@@ -129,6 +130,41 @@ function ToastCard({ title, detail, tone }: { title: string; detail?: string; to
         </motion.div>
       ) : null}
     </motion.div>
+  )
+}
+
+/** Banner over a reviewed line call (the camera is down at the mark meanwhile). */
+function Review() {
+  const [review, setReview] = useState<{ cm: number } | null>(null)
+  useEffect(() => {
+    let raf = 0
+    let last: unknown = null
+    const tick = () => {
+      raf = requestAnimationFrame(tick)
+      if (sim.review !== last) {
+        last = sim.review
+        setReview(sim.review ? { cm: sim.review.cm } : null)
+      }
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [])
+  return (
+    <AnimatePresence>
+      {review ? (
+        <motion.div
+          className="review"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.25, delay: 0.5 }}
+        >
+          <small>Hawk-Eye</small>
+          <b>Out</b>
+          <span>{review.cm} cm</span>
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
   )
 }
 
@@ -406,6 +442,7 @@ export function Hud() {
       <Toast />
       <TimingGrade />
       <ServeSpeed />
+      <Review />
       <LiveReadouts />
       <Rally />
     </div>

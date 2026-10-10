@@ -21,6 +21,7 @@ import { Fx } from './Fx'
 import { Lighting } from './Lighting'
 import { Net } from './Net'
 import { Hall } from './Hall'
+import { HawkEye } from './HawkEye'
 import { CourtyardCourt, GardenCourt } from './OutdoorVenues'
 
 // Physics Lab overlays (?lab): loaded only when the lab is open.
@@ -185,6 +186,7 @@ export function Scene() {
         <CourtyardCourt detail={quality} />
       )}
       <Fx />
+      <HawkEye />
       <CameraRig />
       <Effects quality={quality} surface={surface} />
       {LabScene ? (

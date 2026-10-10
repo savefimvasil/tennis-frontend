@@ -221,8 +221,10 @@ export function applyBounce(v: V3, w: V3, surface: Surface = currentSurface) {
   const uz = v.z - w.x * r
   const u = Math.hypot(ux, uz)
   if (u < 1e-6) return
-  // Change in tangential speed needed to stop the contact point (grip), vs. what friction can supply (slide).
-  const gripDv = u * (ALPHA / (1 + ALPHA))
+  // Change in tangential speed that grips the court (Cross 2005): not just stopping the contact
+  // point but reversing it a little (tangential restitution), so a gripping ball leaves with a
+  // touch of overspin and a livelier kick; vs. what friction can supply (slide).
+  const gripDv = u * (ALPHA / (1 + ALPHA)) * (1 + TANGENTIAL_E)
   const slideDv = surface.mu * (1 + e) * vyIn
   const dv = Math.min(gripDv, slideDv)
   const dx = (-ux / u) * dv
@@ -279,6 +281,9 @@ export function setSurface(id: SurfaceId) {
 export function tuneSurface(id: SurfaceId, mu: number, e: number) {
   Object.assign(SURFACES[id], surface(mu, e))
 }
+
+/** Tangential coefficient of restitution of a gripping bounce (Cross 2005 measures ~0.1-0.2). */
+export const TANGENTIAL_E = 0.12
 
 /** Moment of inertia factor of a tennis ball (I = ALPHA m r^2). */
 export const ALPHA = 0.55

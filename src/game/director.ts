@@ -41,6 +41,10 @@ let serveAim = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 let netRepredictAt = 0
+/** Out by less than this (m) and the call is reviewed on screen. */
+const REVIEW_WITHIN = 0.3
+/** How long the point pause lasts when a call is reviewed (s). */
+const REVIEW_PAUSE = 3.4
 /** How far off (m, sideways) the AI's read of the current incoming ball is. */
 let aiReadError = 0
 
@@ -140,7 +144,7 @@ function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error'
     return
   }
   sim.phase = 'dead'
-  sim.deadTimer = 2.4
+  sim.deadTimer = sim.review ? REVIEW_PAUSE : 2.4
   sim.landing = null
   hudLive.tossMeter = null
   sim.athletes[winner].celebrate = 1.4
@@ -162,7 +166,7 @@ function fault(title: string, detail?: string) {
   st.setServeNumber(2)
   st.showToast(title, 'neutral', detail ? `${detail} · Second serve` : 'Second serve')
   sim.phase = 'dead'
-  sim.deadTimer = 1.5
+  sim.deadTimer = sim.review ? REVIEW_PAUSE - 0.6 : 1.5
   sim.landing = null
   pendingAfterDead = 'serve'
 }
@@ -174,12 +178,21 @@ function fault(title: string, detail?: string) {
 function outBy(x: number, z: number, zSign: 1 | -1, boxX?: 1 | -1): string {
   const r = BALL.radius
   const depth = boxX ? COURT.serviceLine : COURT.halfLength
-  const over = Math.max(
-    Math.abs(x) - COURT.singlesHalfWidth - r,
-    z * zSign - depth - r,
-    boxX ? -x * boxX - r : -Infinity,
-  )
+  const side = Math.abs(x) - COURT.singlesHalfWidth - r
+  const long = z * zSign - depth - r
+  const centre = boxX ? -x * boxX - r : -Infinity
+  const over = Math.max(side, long, centre)
   const cm = Math.max(1, Math.round(over * 100))
+  // Close calls get a Hawk-Eye review: the camera goes down to the mark and the line.
+  if (!online && over < REVIEW_WITHIN) {
+    const line =
+      over === side
+        ? { axis: 'x' as const, value: Math.sign(x) * COURT.singlesHalfWidth }
+        : over === long
+          ? { axis: 'z' as const, value: zSign * depth }
+          : { axis: 'x' as const, value: 0 }
+    sim.review = { x, z, ...line, cm }
+  }
   return cm >= 100 ? `${(cm / 100).toFixed(1)} m out` : `${cm} cm out`
 }
 
@@ -917,6 +930,7 @@ export function stepGame(dt: number) {
   if (sim.phase === 'dead') {
     sim.deadTimer -= dt
     if (sim.deadTimer <= 0) {
+      sim.review = null
       if (pendingAfterDead === 'serve') resetForServe()
       else sim.phase = 'idle'
     }

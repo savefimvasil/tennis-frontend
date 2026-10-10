@@ -123,6 +123,24 @@ export function recolourShirt(src: THREE.Texture, hex: string): THREE.Texture {
   return t
 }
 
+/**
+ * Adds a soft warm rim to a standard material: grazing edges pick up a little of their own
+ * colour, reddened, the way skin and cloth glow where light passes through at the silhouette.
+ * Two lines of shader, no extra pass.
+ */
+function withRim(m: THREE.MeshStandardMaterial, strength: number) {
+  m.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
+      outgoingLight += diffuseColor.rgb * vec3(1.0, 0.55, 0.42) * rim * ${strength.toFixed(2)};
+      #include <opaque_fragment>`,
+    )
+  }
+  m.customProgramCacheKey = () => `rim-${strength}`
+  return m
+}
+
 const worldPos = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3())
 
 /**
@@ -241,8 +259,15 @@ export function RocketboxBody({
     for (const t of Object.values(tex)) if (t) t.anisotropy = 8
     const bodyMap = skin.shirt ? recolourShirt(tex.body, skin.shirt) : tex.body
     // Standard (not physical/sheen) materials: the players fill a lot of pixels near the camera.
-    const body = new THREE.MeshStandardMaterial({ map: bodyMap, normalMap: tex.bodyNormal, roughness: 0.72 })
-    const head = new THREE.MeshStandardMaterial({ map: tex.head, normalMap: tex.headNormal, roughness: 0.55 })
+    // A cheap warm rim stands in for light scattering through skin and fabric at the edges.
+    const body = withRim(
+      new THREE.MeshStandardMaterial({ map: bodyMap, normalMap: tex.bodyNormal, roughness: 0.72 }),
+      0.22,
+    )
+    const head = withRim(
+      new THREE.MeshStandardMaterial({ map: tex.head, normalMap: tex.headNormal, roughness: 0.55 }),
+      0.35,
+    )
     const hair = new THREE.MeshStandardMaterial({
       map: tex.head,
       alphaMap: tex.opacity,

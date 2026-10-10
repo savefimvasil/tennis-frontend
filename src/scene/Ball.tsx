@@ -47,12 +47,21 @@ export function Ball() {
     const { R, Rinv, A, up } = tmp
     R.set(r.x, r.y, r.z, r.w)
     Rinv.copy(R).invert()
+    const squashing = f.t < 0.07
+    const v = b.linvel()
+    const speed = Math.hypot(v.x, v.y, v.z)
+    // Between impacts the ball is stretched along its path by how far it travels in a frame,
+    // the way a camera's shutter smears it on a broadcast: a fast serve reads as a streak.
+    if (!squashing && speed > 1) f.axis.set(v.x / speed, v.y / speed, v.z / speed)
     A.setFromUnitVectors(up, f.axis)
-    const k = f.t < 0.07 ? Math.sin((f.t / 0.07) * Math.PI) * f.amount : 0
-    // Squash group: world rotation A (y along the impact axis) => local R^-1 * A.
+    const k = squashing ? Math.sin((f.t / 0.07) * Math.PI) * f.amount : 0
+    const smear = squashing ? 0 : Math.min(4, (speed * Math.min(dt, 1 / 30)) / (2 * BALL.radius) - 0.6)
+    const stretch = 1 + Math.max(0, smear) * 0.55
+    // Squash group: world rotation A (y along the impact or travel axis) => local R^-1 * A.
     const g = squashGroup.current
     g.quaternion.multiplyQuaternions(Rinv, A)
-    g.scale.set(1 + k * 0.5, 1 - k, 1 + k * 0.5)
+    if (k > 0) g.scale.set(1 + k * 0.5, 1 - k, 1 + k * 0.5)
+    else g.scale.set(1 / Math.sqrt(stretch), stretch, 1 / Math.sqrt(stretch))
     // Mesh keeps the body's world rotation R => local A^-1 * R.
     spinMesh.current.quaternion.copy(A).invert().multiply(R)
   })
@@ -73,7 +82,7 @@ export function Ball() {
       angularDamping={0.05}
     >
       <BallCollider args={[BALL.radius]} mass={BALL.mass} restitution={BALL.restitution} friction={BALL.friction} />
-      <Trail width={0.42} length={4.5} decay={1.2} color="#f6ffbf" attenuation={(t) => t * t * t}>
+      <Trail width={0.24} length={4} decay={1.2} color="#f6ffbf" attenuation={(t) => t * t * t}>
         <group ref={squashGroup}>
           <mesh ref={spinMesh} castShadow>
             <sphereGeometry args={[BALL.radius, 32, 20]} />

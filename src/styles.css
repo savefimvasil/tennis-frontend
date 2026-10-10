@@ -1742,3 +1742,39 @@ button:disabled {
 .touch .dock {
   display: none;
 }
+
+/* ---------------------------------------------------------------- Hawk-Eye review */
+
+.review {
+  position: absolute;
+  top: 16%;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 18px;
+  border-radius: 6px;
+  background: rgba(12, 16, 22, 0.78);
+  border-left: 4px solid #ff4d4d;
+  font-family: var(--f-display);
+  font-style: italic;
+  text-transform: uppercase;
+  color: #fff;
+  pointer-events: none;
+}
+
+.review small {
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  opacity: 0.7;
+}
+
+.review b {
+  font-size: 30px;
+  color: #ff4d4d;
+}
+
+.review span {
+  font-size: 22px;
+}

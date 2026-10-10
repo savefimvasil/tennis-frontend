@@ -65,6 +65,18 @@ export const sim = {
   /** Bounces since the last hit. */
   bounces: 0,
   firstBounce: null as { x: number; z: number } | null,
+  /**
+   * A close line call under review (Hawk-Eye): the bounce mark, the line it was judged
+   * against, and how far out it was. The camera and the court graphics show it while set.
+   */
+  review: null as {
+    x: number
+    z: number
+    /** The line: 'x' = a sideline at x = value, 'z' = a baseline/service line at z = value. */
+    axis: 'x' | 'z'
+    value: number
+    cm: number
+  } | null,
   netTouched: false,
   receiverTouched: false,
   deadTimer: 0,

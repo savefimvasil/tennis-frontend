@@ -25,6 +25,15 @@ export function CameraRig() {
       // A slow orbit inside the venue (the hall's walls are just outside the fence).
       pos.set(Math.sin(t) * 9.5, 5 + Math.sin(t * 2) * 0.8, Math.cos(t) * 17)
       look.set(0, 0.5, 0)
+    } else if (sim.review) {
+      // Hawk-Eye: low over the mark, looking along the line it was judged against.
+      const r = sim.review
+      const along = r.axis === 'x' ? new THREE.Vector3(0, 0, -Math.sign(r.z) || -1) : new THREE.Vector3(1, 0, 0)
+      const out =
+        r.axis === 'x' ? new THREE.Vector3(Math.sign(r.value) || 1, 0, 0) : new THREE.Vector3(0, 0, Math.sign(r.value))
+      pos.set(r.x, 0, r.z).addScaledVector(along, -1.6).addScaledVector(out, -0.9)
+      pos.y = 1.25
+      look.set(r.x, 0.02, r.z)
     } else {
       const a = sim.athletes[0]
       // Trail behind and above the player, leaning toward the ball side.
@@ -39,7 +48,7 @@ export function CameraRig() {
       pos.fromArray(override[0])
       look.fromArray(override[1])
     }
-    const k = 1 - Math.exp(-dt * (screen === 'playing' ? 4.5 : 1.2))
+    const k = 1 - Math.exp(-dt * (sim.review ? 3 : screen === 'playing' ? 4.5 : 1.2))
     // Dev-only hook so automated screenshots don't wait on camera easing.
     const snap = import.meta.env.DEV && (window as { __snapCamera?: boolean }).__snapCamera
     if (!c.init || snap) {

@@ -1,6 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { AnimatePresence, MotionConfig } from 'motion/react'
-import { Scene } from './scene/Scene'
 import { Hud } from './ui/Hud'
 import { GameOver, MainMenu, PauseMenu } from './ui/Menu'
 import { OnlineLobby } from './ui/Online'
@@ -11,6 +10,8 @@ import { useUmpire } from './audio/umpire'
 import { TouchControls, useTouchDevice } from './ui/TouchControls'
 import { setMuted } from './audio/sound'
 import { LAB_ENABLED } from './lab/lab'
+
+const Scene = lazy(() => import('./scene/Scene').then((m) => ({ default: m.Scene })))
 
 const LabPanel = LAB_ENABLED ? lazy(() => import('./lab/LabPanel')) : null
 
@@ -60,7 +61,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Scene />
+      {/* The 3D scene (three, Rapier, post-processing) streams in after the menu has painted. */}
+      <Suspense fallback={null}>
+        <Scene />
+      </Suspense>
       <MotionConfig reducedMotion="user">
         {screen === 'playing' || screen === 'paused' ? <Hud /> : null}
         {screen === 'playing' && touch ? <TouchControls /> : null}
