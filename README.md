@@ -40,7 +40,7 @@ an arrow down. The serve meter floats beside your player. Serve keys: W flat, E 
 ## Options
 
 - **Player:** five shirt colours on the male avatar, or the female avatar.
-- **Opponent:** Club, Pro, Champion (speed, reaction, pace, errors and how close to the lines it aims).
+- **Opponent:** Beginner, Easy, Pro, Champion (speed, reaction, pace, errors and how close to the lines it aims).
   Lower levels also help you: auto-positioning toward the ball, wider timing windows, longer reach and
   tighter shot scatter (`PLAYER_HELP` in `src/game/tuning.ts`).
 - **Court:** hard, clay, grass, tuned to the ITF Court Pace Rating bands.
