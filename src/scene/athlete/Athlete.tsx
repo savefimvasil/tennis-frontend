@@ -28,6 +28,7 @@ import {
   toLocal,
 } from './anim'
 import { Racket } from './Racket'
+import { blendInto, makeSample, MOCAP, sampleCycle } from './mocap'
 import { PLAYER } from '../../game/tuning'
 import { RocketboxBody, type RigDims, type RocketboxHandle } from './Rocketbox'
 import type { Skin } from './skins'
@@ -206,6 +207,8 @@ const PRIMITIVE_DIMS: Dims = { pelvisY: 0.95, spineY: 0.06, shoulderY: 0.43, sho
 
 const tmpTrack = makePose()
 const tmpRun = makePose()
+const mocapRun = makeSample()
+const mocapCross = makeSample()
 
 /** Joints the shot tracks own. */
 const UPPER: Joint[] = ['spine', 'neck', 'lSh', 'lEl', 'rSh', 'rEl', 'rWr']
@@ -387,10 +390,25 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
 
     // ---- Locomotion: a forward/back run and a side shuffle, blended by direction of travel.
     const g = gaitFor(v.x, v.z)
-    s.hipYaw += (g.hipYaw - s.hipYaw) * approach(8, dt)
     const stride = strideLength(speed) * (1 - g.shuffle) + 1.05 * g.shuffle
     s.phase += (dt * speed * (Math.PI * 2)) / stride
     const run = Math.min(1, speed / 4.5) * g.run
+    // Motion capture where it fits: the forward run, and the fast crossover run sideways
+    // (hips turned ~75 degrees into the run). Slow shuffles and backpedalling stay procedural.
+    const lateral = speed > 0.25 ? Math.abs(v.x) / speed : 0
+    const crossW = lateral * smoothstep(3, 4.6, speed)
+    const runW = g.dir > 0 ? (1 - lateral) * smoothstep(1.5, 3.5, speed) : 0
+    const u = s.phase / (Math.PI * 2)
+    let yawTarget = g.hipYaw
+    if (runW > 0.01) {
+      sampleCycle(MOCAP.run, u, mocapRun)
+      yawTarget += (mocapRun.yaw - MOCAP.run.meanYaw) * runW
+    }
+    if (crossW > 0.01) {
+      sampleCycle(v.x > 0 ? MOCAP.strafeLeft : MOCAP.strafeRight, u, mocapCross)
+      yawTarget += (mocapCross.yaw - yawTarget) * crossW
+    }
+    s.hipYaw += (yawTarget - s.hipYaw) * approach(8, dt)
 
     const target = tmpRun
     copyPose(READY, target)
@@ -419,6 +437,16 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       target.j.lHip[0] -= 0.12 * shuffle
       target.j.rHip[0] -= 0.12 * shuffle
       target.lift += (Math.abs(Math.sin(s.phase)) * 0.03 - 0.035) * shuffle
+    }
+
+    if (runW > 0.01) {
+      // The capture leans hard into a sprint: take half of its spine.
+      blendInto(target, mocapRun, runW, 0.5)
+      target.lift += (mocapRun.lift - target.lift) * runW
+    }
+    if (crossW > 0.01) {
+      blendInto(target, mocapCross, crossW, 0.5)
+      target.lift += (mocapCross.lift - target.lift) * crossW
     }
 
     // Lean into acceleration; sit into the legs when braking hard.
