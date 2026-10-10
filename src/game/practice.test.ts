@@ -1,0 +1,30 @@
+import { describe, expect, it } from 'vitest'
+import { useGame } from './store'
+
+describe('practice', () => {
+  it('walks serve -> timing -> aim, then hands the player their settings back', () => {
+    const g = () => useGame.getState()
+    g().setDifficulty('ace')
+    g().setFormat('quick')
+    g().startPractice()
+    expect(g().difficulty).toBe('easy')
+    expect(g().practice?.step).toBe(0)
+    g().practiceEvent({ kind: 'rallyIn', grade: 'perfect', x: 0 })
+    expect(g().practice?.count).toBe(0)
+    g().practiceEvent({ kind: 'serveIn' })
+    g().practiceEvent({ kind: 'serveIn' })
+    expect(g().practice?.step).toBe(1)
+    g().practiceEvent({ kind: 'rallyIn', grade: 'late', x: 0 })
+    for (let i = 0; i < 3; i++) g().practiceEvent({ kind: 'rallyIn', grade: 'good', x: 0 })
+    expect(g().practice?.step).toBe(2)
+    g().practiceEvent({ kind: 'rallyIn', grade: 'good', x: -2.5 })
+    g().practiceEvent({ kind: 'rallyIn', grade: 'good', x: -2.5 })
+    expect(g().practice?.step).toBe(2)
+    g().practiceEvent({ kind: 'rallyIn', grade: 'early', x: 2.4 })
+    expect(g().practice?.step).toBe(3)
+    g().start()
+    expect(g().practice).toBeNull()
+    expect(g().difficulty).toBe('ace')
+    expect(g().format).toBe('quick')
+  })
+})

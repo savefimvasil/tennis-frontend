@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   ArrowsClockwise,
@@ -9,6 +9,7 @@ import {
   Globe,
   Gauge,
   House,
+  GraduationCap,
   Keyboard,
   Monitor,
   Play,
@@ -154,6 +155,15 @@ export function MainMenu() {
     start,
   } = useGame()
   const [help, setHelp] = useState(false)
+  const startPractice = useGame((s) => s.startPractice)
+  // New players get the practice button highlighted until they have tried it once.
+  const firstVisit = useMemo(() => {
+    try {
+      return !localStorage.getItem('tennis.practiced')
+    } catch {
+      return false
+    }
+  }, [])
   return (
     <motion.div className="overlay menu" {...overlayMotion}>
       <motion.div className="menu-grid" {...stagger}>
@@ -202,6 +212,16 @@ export function MainMenu() {
           <motion.div className="menu-secondary" {...staggerItem}>
             <button className="ghost" onClick={() => setHelp(true)}>
               <Keyboard weight="bold" /> Controls
+            </button>
+            <button
+              className={`ghost${firstVisit ? ' attention' : ''}`}
+              onClick={() => {
+                initAudio()
+                flushInput()
+                startPractice()
+              }}
+            >
+              <GraduationCap weight="bold" /> Practice
             </button>
             <SoundToggle />
           </motion.div>

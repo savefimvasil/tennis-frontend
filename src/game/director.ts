@@ -41,6 +41,8 @@ let serveAim = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 let netRepredictAt = 0
+/** Timing grade of the player's last rally shot (practice counts the well-timed ones). */
+let lastHumanGrade: Grade = 'good'
 /** Out by less than this (m) and the call is reviewed on screen. */
 const REVIEW_WITHIN = 0.3
 /** How long the point pause lasts when a call is reviewed (s). */
@@ -636,6 +638,7 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     const shot = rallyShot(a.queued.shot, Math.abs(sim.athletes[AI].z))
     startSwing(a, win.lateral, shot, p.y)
     useGame.getState().showTiming(grade)
+    lastHumanGrade = grade
     snapBallToRacket(a)
     const aim = { x: Math.max(-1, Math.min(1, input.moveX)), y: Math.max(-1, Math.min(1, input.moveY)) }
     strike(
@@ -820,6 +823,7 @@ function onBounce(p: V3, vy: number) {
     sim.firstBounce = { x: p.x, z: p.z }
     sim.landing = null
     predictFromBall()
+    if (hitter === HUMAN) useGame.getState().practiceEvent({ kind: 'serveIn' })
     return
   }
 
@@ -835,6 +839,7 @@ function onBounce(p: V3, vy: number) {
     sim.firstBounce = { x: p.x, z: p.z }
     sim.landing = null
     predictFromBall()
+    if (hitter === HUMAN) useGame.getState().practiceEvent({ kind: 'rallyIn', grade: lastHumanGrade, x: p.x })
     return
   }
   if (sim.bounces >= 2) {

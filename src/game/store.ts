@@ -35,6 +35,20 @@ function save(key: string, value: string) {
 
 export type Quality = 'high' | 'medium' | 'low'
 
+/**
+ * Guided practice: a long match against the easy CPU with a coach panel. Steps: serve two
+ * in, return three in with good timing, then aim one each way.
+ */
+export interface Practice {
+  step: 0 | 1 | 2 | 3
+  count: number
+  left: boolean
+  right: boolean
+  /** Settings to restore afterwards (practice does not overwrite the saved ones). */
+  restore: { difficulty: Difficulty; format: FormatId }
+}
+export const PRACTICE_GOALS = [2, 3, 2] as const
+
 interface GameStore {
   screen: Screen
   /** Single player against the AI, or an online match refereed by the server. */
@@ -58,6 +72,10 @@ interface GameStore {
   serveFlash: { id: number; kmh: number } | null
   muted: boolean
   stats: { winners: [number, number]; aces: [number, number]; errors: [number, number]; rally: number; longest: number }
+  practice: Practice | null
+  startPractice(): void
+  /** Progress events from the director: a serve in, a rally shot in (with its grade and x). */
+  practiceEvent(e: { kind: 'serveIn' } | { kind: 'rallyIn'; grade: Grade; x: number }): void
   setDifficulty(d: Difficulty): void
   setFormat(f: FormatId): void
   setQuality(q: Quality): void
@@ -120,6 +138,36 @@ export const useGame = create<GameStore>((set, get) => ({
   serveFlash: null,
   muted: saved('muted', ['1', '0'], '0') === '1',
   stats: freshStats(),
+  practice: null,
+  startPractice: () => {
+    const st = get()
+    const restore = st.practice?.restore ?? { difficulty: st.difficulty, format: st.format }
+    save('practiced', '1')
+    st.start()
+    set({
+      difficulty: 'easy',
+      format: 'match',
+      match: newMatch(FORMATS.match, 0),
+      practice: { step: 0, count: 0, left: false, right: false, restore },
+    })
+  },
+  practiceEvent: (e) => {
+    const p = get().practice
+    if (!p || p.step === 3) return
+    const next = { ...p }
+    if (p.step === 0 && e.kind === 'serveIn') next.count += 1
+    if (p.step === 1 && e.kind === 'rallyIn' && (e.grade === 'perfect' || e.grade === 'good')) next.count += 1
+    if (p.step === 2 && e.kind === 'rallyIn') {
+      if (e.x < -1.6) next.left = true
+      if (e.x > 1.6) next.right = true
+      next.count = Number(next.left) + Number(next.right)
+    }
+    if (next.count >= PRACTICE_GOALS[p.step]) {
+      next.step = (p.step + 1) as Practice['step']
+      next.count = 0
+    }
+    set({ practice: next })
+  },
   setDifficulty: (difficulty) => {
     save('difficulty', difficulty)
     set({ difficulty })
@@ -154,19 +202,35 @@ export const useGame = create<GameStore>((set, get) => ({
     save('muted', muted ? '1' : '0')
     set({ muted })
   },
-  start: () =>
+  start: () => {
+    // Leaving practice for a real match brings the player's own settings back.
+    const restore = get().practice?.restore
+    const format = restore ? restore.format : get().format
     set({
+      ...(restore ?? {}),
+      practice: null,
       mode: 'solo',
       opponentName: 'R. Okafor',
       screen: 'playing',
-      match: newMatch(FORMATS[get().format], 0),
+      match: newMatch(FORMATS[format], 0),
       serveNumber: 1,
       toast: null,
       stats: freshStats(),
-    }),
+    })
+  },
   pause: () => get().screen === 'playing' && set({ screen: 'paused' }),
   resume: () => get().screen === 'paused' && set({ screen: 'playing' }),
-  quit: () => set({ screen: 'menu', toast: null, mode: 'solo', opponentName: 'R. Okafor' }),
+  quit: () => {
+    const p = get().practice
+    set({
+      screen: 'menu',
+      toast: null,
+      mode: 'solo',
+      opponentName: 'R. Okafor',
+      practice: null,
+      ...(p ? p.restore : {}),
+    })
+  },
   openOnline: () => set({ screen: 'online', mode: 'solo', toast: null }),
   point: (winner, title, detail, kind) => {
     const { state, outcome } = awardPoint(get().match, winner)

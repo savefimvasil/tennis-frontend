@@ -340,7 +340,8 @@ label:focus-within {
 
 .serve-speed-anchor {
   position: absolute;
-  top: 18%;
+  /* Below the practice coach, which sits at the top centre. */
+  top: 25%;
   left: 0;
   right: 0;
   display: grid;
@@ -1747,7 +1748,7 @@ button:disabled {
 
 .review {
   position: absolute;
-  top: 16%;
+  top: 25%;
   left: 50%;
   translate: -50% 0;
   display: flex;
@@ -1777,4 +1778,76 @@ button:disabled {
 
 .review span {
   font-size: 22px;
+}
+
+/* ---------------------------------------------------------------- practice */
+
+.coach {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  translate: -50% 0;
+  width: min(420px, calc(100vw - 32px));
+  padding: 12px 16px 14px;
+  border-radius: 10px;
+  background: rgba(12, 16, 22, 0.82);
+  border-top: 3px solid var(--ball);
+  color: #fff;
+  pointer-events: auto;
+}
+
+.coach small {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+.coach b {
+  display: block;
+  font-family: var(--f-display);
+  font-style: italic;
+  font-size: 22px;
+  text-transform: uppercase;
+  margin: 2px 0 4px;
+}
+
+.coach p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  opacity: 0.9;
+}
+
+.coach-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.coach-dots span {
+  width: 22px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.coach-dots span.on {
+  background: var(--ball);
+}
+
+.coach-go {
+  margin-top: 10px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--ball);
+  color: #10141a;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ghost.attention {
+  border-color: var(--ball);
+  color: var(--ball);
 }

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { sim } from '../game/sim'
 import { AnimatePresence, motion } from 'motion/react'
 import { Fire, Gauge, Pause, SpeakerHigh, SpeakerSlash, TennisBall, Wind } from '@phosphor-icons/react'
-import { useGame, hudLive } from '../game/store'
+import { useGame, hudLive, PRACTICE_GOALS } from '../game/store'
 import { pointLabel, pressureLabel, scoreCall, setsWon } from '../game/scoring'
 import { SERVE } from '../game/tuning'
 import type { Side } from '../game/constants'
@@ -129,6 +129,54 @@ function ToastCard({ title, detail, tone }: { title: string; detail?: string; to
           {detail}
         </motion.div>
       ) : null}
+    </motion.div>
+  )
+}
+
+const COACH = [
+  {
+    title: 'Serve it in',
+    text: 'Hold a shot key to toss, let go near the top of the toss. Steer left/right during the toss to aim.',
+  },
+  {
+    title: 'Time your returns',
+    text: 'Press a shot key as the ball comes to you: Perfect or Good timing, and keep it in the court.',
+  },
+  {
+    title: 'Aim it',
+    text: 'After pressing, the stick aims: hold left for one shot, right for another. Land one each way.',
+  },
+]
+
+/** The practice coach: the current step, its progress, and the way out when it is done. */
+function Coach() {
+  const practice = useGame((s) => s.practice)
+  const start = useGame((s) => s.start)
+  if (!practice) return null
+  const done = practice.step === 3
+  const step = COACH[Math.min(practice.step, 2)]
+  return (
+    <motion.div className="coach" key={practice.step} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
+      <small>Practice · {done ? 'done' : `step ${practice.step + 1} of 3`}</small>
+      {done ? (
+        <>
+          <b>Ready for a match</b>
+          <p>Serve, timing and aim: that is the game. The CPU levels go up from here.</p>
+          <button className="coach-go" onClick={start}>
+            Play a match
+          </button>
+        </>
+      ) : (
+        <>
+          <b>{step.title}</b>
+          <p>{step.text}</p>
+          <div className="coach-dots">
+            {Array.from({ length: PRACTICE_GOALS[practice.step as 0 | 1 | 2] }, (_, i) => (
+              <span key={i} className={i < practice.count ? 'on' : ''} />
+            ))}
+          </div>
+        </>
+      )}
     </motion.div>
   )
 }
@@ -443,6 +491,7 @@ export function Hud() {
       <TimingGrade />
       <ServeSpeed />
       <Review />
+      <Coach />
       <LiveReadouts />
       <Rally />
     </div>
