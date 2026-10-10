@@ -104,12 +104,13 @@ function startCrowd() {
   const src = ctx.createBufferSource()
   src.buffer = noise
   src.loop = true
+  // A low murmur under the applause only. It used to run all the time at a low level, which
+  // the output compressor lifted into a constant hiss on phone speakers: silent at rest now.
   const f = ctx.createBiquadFilter()
-  f.type = 'bandpass'
-  f.frequency.value = 600
-  f.Q.value = 0.4
+  f.type = 'lowpass'
+  f.frequency.value = 500
   const gain = ctx.createGain()
-  gain.gain.value = 0.015
+  gain.gain.value = 0
   src.connect(f).connect(gain).connect(master)
   src.start()
   crowd = { gain }
@@ -132,7 +133,7 @@ export function playApplause(strength = 1) {
     )
   }
   crowd.gain.gain.setTargetAtTime(0.04 * strength, t, 0.2)
-  crowd.gain.gain.setTargetAtTime(0.015, t + 1.5, 0.8)
+  crowd.gain.gain.setTargetAtTime(0, t + 1.5, 0.8)
 }
 
 export function playGroan() {
