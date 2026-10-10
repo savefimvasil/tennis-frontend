@@ -188,9 +188,11 @@ function placeBesidePlayer(panel: HTMLDivElement) {
   const h = panel.offsetHeight
   const vw = window.innerWidth
   const vh = window.innerHeight
+  // On touch screens the shot buttons own the bottom-right corner.
+  const right = vw - PANEL_MARGIN - (document.documentElement.classList.contains('touch') ? 190 : 0)
   let x = a.x + PANEL_GAP
-  if (x + w > vw - PANEL_MARGIN) x = a.x - PANEL_GAP - w
-  x = Math.max(PANEL_MARGIN, Math.min(vw - PANEL_MARGIN - w, x))
+  if (x + w > right) x = a.x - PANEL_GAP - w
+  x = Math.max(PANEL_MARGIN, Math.min(right - w, x))
   const y = Math.max(PANEL_TOP, Math.min(vh - PANEL_MARGIN - h, a.y - h / 2))
   const t = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`
   if (panel.style.transform !== t) panel.style.transform = t
@@ -224,7 +226,7 @@ function LiveReadouts() {
           const out = Math.abs(a) > AIM_IN ? 'out' : Math.abs(a) > 0.8 ? 'line' : 'in'
           if (aimNeedle.current.dataset.state !== out) aimNeedle.current.dataset.state = out
         }
-        let text = 'Hold a shot key to toss'
+        let text = 'Hold a shot to toss'
         let state = 'idle'
         if (stage === 'toss' && m !== null) {
           const y = SERVE.handHeight + m * (SERVE.apex - SERVE.handHeight)

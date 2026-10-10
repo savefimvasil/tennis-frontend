@@ -133,7 +133,7 @@ export function resetForServe() {
   sim.prevVy = 0
 }
 
-function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error' | 'double') {
+function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error' | 'double', detail?: string) {
   if (sim.phase === 'dead' || sim.phase === 'idle') return
   if (online) {
     awaitCall()
@@ -144,11 +144,11 @@ function endPoint(winner: Side, title: string, kind?: 'winner' | 'ace' | 'error'
   sim.landing = null
   hudLive.tossMeter = null
   sim.athletes[winner].celebrate = 1.4
-  const outcome = useGame.getState().point(winner, title, undefined, kind)
+  const outcome = useGame.getState().point(winner, title, detail, kind)
   pendingAfterDead = outcome === 'match' ? 'none' : 'serve'
 }
 
-function fault(title: string) {
+function fault(title: string, detail?: string) {
   if (sim.phase !== 'serve') return
   if (online) {
     awaitCall()
@@ -160,11 +160,27 @@ function fault(title: string) {
     return
   }
   st.setServeNumber(2)
-  st.showToast(title, 'neutral', 'Second serve')
+  st.showToast(title, 'neutral', detail ? `${detail} · Second serve` : 'Second serve')
   sim.phase = 'dead'
   sim.deadTimer = 1.5
   sim.landing = null
   pendingAfterDead = 'serve'
+}
+
+/**
+ * How far out a bounce was, for the call ("12 cm out"): the gap between the ball's edge and the
+ * nearest line it missed, on the singles court or (with `boxX`) the service box.
+ */
+function outBy(x: number, z: number, zSign: 1 | -1, boxX?: 1 | -1): string {
+  const r = BALL.radius
+  const depth = boxX ? COURT.serviceLine : COURT.halfLength
+  const over = Math.max(
+    Math.abs(x) - COURT.singlesHalfWidth - r,
+    z * zSign - depth - r,
+    boxX ? -x * boxX - r : -Infinity,
+  )
+  const cm = Math.max(1, Math.round(over * 100))
+  return cm >= 100 ? `${(cm / 100).toFixed(1)} m out` : `${cm} cm out`
 }
 
 function predictFromBall() {
@@ -775,7 +791,8 @@ function onBounce(p: V3, vy: number) {
   if (sim.phase === 'serve') {
     const boxX = -serverXSign(hitter, sim.deuceCourt) as 1 | -1
     if (!inServiceBox(p.x, p.z, halfSign(receiver), boxX)) {
-      fault(sim.netTouched && half === hitter ? 'Net' : 'Fault')
+      const net = sim.netTouched && half === hitter
+      fault(net ? 'Net' : 'Fault', net || half === hitter ? undefined : outBy(p.x, p.z, halfSign(receiver), boxX))
       return
     }
     if (sim.netTouched) {
@@ -799,7 +816,7 @@ function onBounce(p: V3, vy: number) {
       return
     }
     if (!inSinglesCourt(p.x, p.z, halfSign(receiver))) {
-      endPoint(receiver, 'Out', 'error')
+      endPoint(receiver, 'Out', 'error', outBy(p.x, p.z, halfSign(receiver)))
       return
     }
     sim.firstBounce = { x: p.x, z: p.z }

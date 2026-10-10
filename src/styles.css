@@ -1641,3 +1641,104 @@ button:disabled {
 .serve-panel[data-stage='aim'] .serve-aim {
   opacity: 0.35;
 }
+
+/* ---------------------------------------------------------------- touch controls */
+
+.touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.touch-stick-zone {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 50%;
+  height: 62%;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-stick-hint {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.touch-stick {
+  position: fixed;
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  background: rgba(12, 16, 22, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  display: grid;
+  place-items: center;
+}
+
+.touch-knob {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.touch-shots {
+  position: absolute;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(18px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  grid-template-rows: repeat(2, 72px);
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.touch-shot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(12, 16, 22, 0.55);
+  color: #fff;
+  font-family: var(--f-display);
+  font-weight: 700;
+  font-size: 14px;
+  text-transform: uppercase;
+  touch-action: none;
+}
+
+.touch-shot.down {
+  background: var(--ball);
+  color: #10141a;
+}
+
+.touch-topspin {
+  border-color: var(--ball);
+}
+
+.touch-shot small {
+  display: block;
+  font-family: var(--f-body, inherit);
+  font-size: 9px;
+  font-weight: 500;
+  text-transform: none;
+  opacity: 0.7;
+}
+
+/* Keycap hints mean nothing on a touch screen. */
+.touch .serve-keys,
+.touch .serve-hint,
+.touch .dock {
+  display: none;
+}

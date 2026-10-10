@@ -7,6 +7,8 @@ import { OnlineLobby } from './ui/Online'
 import { startNet } from './net/net'
 import { useGame } from './game/store'
 import { installInput, flushInput, padStartPressed } from './input/input'
+import { useUmpire } from './audio/umpire'
+import { TouchControls, useTouchDevice } from './ui/TouchControls'
 import { setMuted } from './audio/sound'
 import { LAB_ENABLED } from './lab/lab'
 
@@ -15,6 +17,8 @@ const LabPanel = LAB_ENABLED ? lazy(() => import('./lab/LabPanel')) : null
 export default function App() {
   const screen = useGame((s) => s.screen)
   const muted = useGame((s) => s.muted)
+  useUmpire()
+  const touch = useTouchDevice()
 
   useEffect(() => {
     installInput()
@@ -59,6 +63,7 @@ export default function App() {
       <Scene />
       <MotionConfig reducedMotion="user">
         {screen === 'playing' || screen === 'paused' ? <Hud /> : null}
+        {screen === 'playing' && touch ? <TouchControls /> : null}
         <AnimatePresence>
           {screen === 'menu' ? <MainMenu key="menu" /> : null}
           {screen === 'online' ? <OnlineLobby key="online" /> : null}
