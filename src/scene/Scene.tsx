@@ -5,9 +5,11 @@ import { Preload } from '@react-three/drei'
 import { Physics, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
 import { useFrame } from '@react-three/fiber'
 import { LAB_ENABLED, useLab } from '../lab/lab'
-import { PHYSICS } from '../game/constants'
+import * as THREE from 'three'
+import { HUMAN, PHYSICS } from '../game/constants'
 import { resetForServe, stepGame } from '../game/director'
-import { useGame } from '../game/store'
+import { sim } from '../game/sim'
+import { hudLive, useGame } from '../game/store'
 import { Athlete, KITS } from './athlete/Athlete'
 import { opponentSkin, seatSkins, skinById } from './athlete/skins'
 import { useNet } from '../net/net'
@@ -18,7 +20,8 @@ import { Effects } from './Effects'
 import { Fx } from './Fx'
 import { Lighting } from './Lighting'
 import { Net } from './Net'
-import { Surroundings } from './Surroundings'
+import { Hall } from './Hall'
+import { CourtyardCourt, GardenCourt } from './OutdoorVenues'
 
 // Physics Lab overlays (?lab): loaded only when the lab is open.
 const LabScene = LAB_ENABLED ? lazy(() => import('../lab/LabScene')) : null
@@ -55,6 +58,25 @@ function Players({ skin }: { skin: string }) {
   )
 }
 
+const anchorPoint = new THREE.Vector3()
+
+/** Projects my player to the screen while I serve, for the serve meter that floats beside them. */
+function ServeAnchor() {
+  useFrame(({ camera, size }) => {
+    const a = hudLive.serveAnchor
+    if (!hudLive.serveStage) {
+      a.ok = false
+      return
+    }
+    const me = sim.athletes[HUMAN]
+    anchorPoint.set(me.x, 1.3, me.z).project(camera)
+    a.x = ((anchorPoint.x + 1) / 2) * size.width
+    a.y = ((1 - anchorPoint.y) / 2) * size.height
+    a.ok = anchorPoint.z < 1
+  })
+  return null
+}
+
 function GameLoop() {
   useBeforePhysicsStep(() => stepGame(PHYSICS.timeStep))
   useEffect(() => {
@@ -76,8 +98,9 @@ const PRESETS = {
 } as const
 
 /**
- * Caps the frame rate: 60 fps in play (120 Hz screens would otherwise render twice as much),
- * 30 fps behind menus. Rendering runs on demand and this loop requests frames.
+ * Caps the frame rate: the player's choice in play (60, or 30 for quiet fans; 120 Hz screens
+ * would otherwise render twice as much), 20 fps behind menus. Rendering runs on demand and
+ * this loop requests frames.
  */
 function FrameLimiter({ fps }: { fps: number }) {
   const invalidate = useThree((s) => s.invalidate)
@@ -104,6 +127,7 @@ export function Scene() {
   const quality = useGame((s) => s.quality)
   const screen = useGame((s) => s.screen)
   const skin = useGame((s) => s.skin)
+  const surface = useGame((s) => s.surface)
   const preset = PRESETS[quality]
   // A fixed pixel ratio per quality. Changing it on the fly (as an automatic performance
   // monitor did) reallocates every render target and recompiles shaders: that was the freezing.
@@ -114,6 +138,7 @@ export function Scene() {
   const mode = useGame((s) => s.mode)
   // An online match keeps running behind the pause menu: the opponent does not stop.
   const running = screen === 'playing' || (mode === 'online' && screen === 'paused')
+  const fpsCap = useGame((s) => Number(s.fps))
   const slow = running && timeScale < 1
 
   return (
@@ -123,7 +148,7 @@ export function Scene() {
       flat
       frameloop="demand"
       gl={{ antialias: false, powerPreference: 'default', stencil: false }}
-      camera={{ fov: 50, near: 0.1, far: 1200, position: [0, 8, 30] }}
+      camera={{ fov: 50, near: 0.1, far: 200, position: [0, 6, 16] }}
       onCreated={(state) => {
         // three.js checks every new shader synchronously, stalling the GPU pipeline; dev only.
         state.gl.debug.checkShaderErrors = import.meta.env.DEV
@@ -131,8 +156,9 @@ export function Scene() {
         if (import.meta.env.DEV) Object.assign(window, { __r3f: state })
       }}
     >
-      <FrameLimiter fps={running ? 60 : 30} />
-      <Lighting key={shadowSize} shadowSize={shadowSize} />
+      {/* Menus only show a slow orbit behind the panels: 20 fps is plenty and keeps the GPU cool. */}
+      <FrameLimiter fps={running ? fpsCap : 20} />
+      <Lighting key={`${shadowSize}-${surface}`} shadowSize={shadowSize} indoor={surface === 'hard'} />
       <Suspense fallback={null}>
         <Physics
           gravity={[0, PHYSICS.gravity, 0]}
@@ -143,13 +169,21 @@ export function Scene() {
         >
           {slow ? <SlowStepper scale={timeScale} /> : null}
           <GameLoop />
+          <ServeAnchor />
           <Court />
           <Net />
           <Ball />
         </Physics>
       </Suspense>
       <Players skin={skin} />
-      <Surroundings detail={quality} />
+      {/* One small, closed venue per surface: nothing outside it needs drawing. */}
+      {surface === 'hard' ? (
+        <Hall detail={quality} />
+      ) : surface === 'grass' ? (
+        <GardenCourt detail={quality} />
+      ) : (
+        <CourtyardCourt detail={quality} />
+      )}
       <Fx />
       <CameraRig />
       <Effects quality={quality} />

@@ -1,5 +1,36 @@
 # Graphics: where the detail comes from, and what is next
 
+## Venues (current)
+
+Each surface has its own small, closed venue, so there is no wide world to draw: the
+camera only ever sees the inside of the enclosure, the sky and a few tree tops.
+
+| Surface | Venue | File |
+| --- | --- | --- |
+| Hard | Indoor hall under a timber gridshell, in the evening: a diagonal glulam lattice over a white membrane, two rows of LED floodlights hung on cables below it, a wood-panelled wall with a band of open windows onto a dark lawn and trees under a blue-hour sky (`DuskSky` in `Lighting.tsx`, with a few stars), arched end walls glazed with the same clear glass as the windows, between timber mullions. The key light is near-vertical and soft, so player shadows are short and faint and nothing stripes the court: easier to read the ball. | `src/scene/Hall.tsx` |
+| Grass | Garden court: club fence and windscreen, a lawn, a tall clipped hedge, a white weatherboard pavilion with a green gable roof and clock, broadleaf trees and umbrella pines over the hedge. | `src/scene/OutdoorVenues.tsx` |
+| Clay | Mediterranean courtyard: club fence and windscreen, ochre stucco walls with arches and terracotta coping, bougainvillea spilling over them, cypresses and umbrella pines beyond. | `src/scene/OutdoorVenues.tsx` |
+
+All three have the players' benches and a bench of about ten spectators sitting together
+(real posed avatars, `Spectators.tsx`). Shared pieces live in `VenueParts.tsx`.
+
+**Materials.** Photo-scanned CC0 sets where the library has them (stucco, roof tiles,
+paving, grass, the courts) and procedural PBR sets for the rest (`proceduralMaterials.ts`):
+glulam with laminations, glue lines and growth rings; oak or painted planks; the woven
+membrane. Each comes with colour, normal and roughness maps, generated once at load.
+Ambient occlusion now runs on Medium as well as High.
+
+**Trees.** Real trees from EZ-Tree (MIT), baked by `tools/trees` into one GLB of six
+variants: branches with photo bark and photo leaf cards whose normals bend out from the
+crown centre, so each crown shades as one volume. The hall sees them through its open
+windows, the garden over its hedge (oaks, ash, pines), the courtyard over its walls
+(cypresses, stone pines). They are instanced (two draw calls per variant), cast no shadows,
+and drop back to the primitive crowns on Low. The courtyard's bougainvillea is hanging spray
+cards (a procedural canvas of leaves and magenta bracts) instead of balls.
+
+The sections below describe the earlier outdoor stadium venue (removed; it is in the git
+history) and stay for reference.
+
 ## Audit (before this pass)
 
 Screenshots from the gameplay camera, the net, the stands and a wide orbit.
@@ -72,6 +103,47 @@ included:
 The crowd sprites cost less than the capsules they replace. The extra cost on high is mostly
 the four ball kids and their shadows.
 
+## Landscape pass
+
+- **Vegetation** (`Nature.tsx`): about 2,400 trees on High (1,400 Medium, 500 Low) on the
+  hills: cypresses on the lower ground, umbrella pines on the ridges, olives on the open
+  terraces. They are scattered in groves by a noise field (`woodland` in `terrain.ts`) from
+  95 m out, so the club grounds stay open. Low-poly and instanced: three draw calls.
+- **Hillside colours** follow the same field: golden dry grass on open slopes, maquis scrub,
+  dark green under the groves, pale rock higher up, instead of one olive tone.
+- **Mountain ridges** in three layers with smooth massifs, pre-blended toward the haze (blue
+  and lighter with distance) and drawn without fog, so they read as layered distance instead
+  of one grey band.
+- **Town**: walls in whitewash, sand, ochre and faded terracotta.
+- **Grade**: a little saturation after the AgX tone mapping, which washes colours out.
+
+## Neighbourhood court
+
+The venue is a city court rather than a stadium, in the spirit of GTA's public courts: a
+2.7 m windscreen all round so the court feels enclosed and most of the outside is hidden,
+warm string lights sagging along the top rail of both long sides, the players' benches, and
+one small three-row bleacher by the net with a dozen or so friends watching. The two big
+stands (several hundred spectators), the chair umpire and the ball kids are gone.
+
+## Performance pass
+
+Measured in a rally (dev build, per frame): all the game logic (physics at 120 Hz, the
+director, the AI and both athletes' animation with IK) takes well under a millisecond of
+CPU. The cost is the GPU: the render passes and the vertices and pixels they push. So:
+
+- **Trees** were most of the scene's vertices (648k of 796k). They are now indexed and
+  ~25-30 vertices each, with a few hundred fewer: 160k, the whole scene 358k.
+- **Frame-rate setting** (menu, saved): 60 fps, or 30 fps for quiet fans and battery.
+  Physics still steps at 120 Hz either way.
+- **Menus** render the backdrop at 20 fps instead of 30.
+- **Far field baked like a skybox** (`FarField.tsx`): everything beyond ~100 m (hills, groves,
+  town, ridges, the bay, the outer lawn) is rendered into a panorama around the camera (8
+  sectors of 45 degrees, linear HDR, fog and lighting included) and drawn every frame as one
+  textured sphere. It is re-baked one sector per frame only when the camera has moved more
+  than 6 m (parallax), plus a slow background refresh for late-loading textures. The near
+  lawn is clipped to an octagon so it never covers the baked hills. Clouds stay live.
+- Rewriting game code in Rust/WebAssembly would not help: it is not where the time goes.
+
 ## Next steps, by value
 
 1. **Clubhouse depth.** Recessed windows and arches, a balcony rail, shutters and a terrace
@@ -84,6 +156,5 @@ the four ball kids and their shadows.
    avatar variety: more Rocketbox characters through `tools/rocketbox/`.
 4. **Animated ball kids.** Run to collect balls after a point, using the players' rig.
 5. **Instanced grass** in a band just outside the fence, for the menu orbit and replays.
-6. **Contact shadows** under the players' feet (drei `ContactShadows`, high only) and
-   cascaded shadow maps (three `CSM`) for crisp shadows near the camera and wide coverage.
+6. **Cascaded shadow maps** (soft contact blobs under the players are done) (three `CSM`) for crisp shadows near the camera and wide coverage.
 7. **Replay camera with depth of field** after big points, using the existing slow motion.

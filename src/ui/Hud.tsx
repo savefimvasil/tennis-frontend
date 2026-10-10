@@ -153,6 +153,27 @@ function TimingGrade() {
   )
 }
 
+const PANEL_GAP = 60
+const PANEL_MARGIN = 16
+/** Keeps clear of the scoreboard at the top left. */
+const PANEL_TOP = 140
+
+/** Puts the serve panel beside my player (right of them, or left near the screen edge). */
+function placeBesidePlayer(panel: HTMLDivElement) {
+  const a = hudLive.serveAnchor
+  if (!a.ok || panel.dataset.stage === 'off') return
+  const w = panel.offsetWidth
+  const h = panel.offsetHeight
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let x = a.x + PANEL_GAP
+  if (x + w > vw - PANEL_MARGIN) x = a.x - PANEL_GAP - w
+  x = Math.max(PANEL_MARGIN, Math.min(vw - PANEL_MARGIN - w, x))
+  const y = Math.max(PANEL_TOP, Math.min(vh - PANEL_MARGIN - h, a.y - h / 2))
+  const t = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`
+  if (panel.style.transform !== t) panel.style.transform = t
+}
+
 /** Toss meter and shot speed are written straight to the DOM every frame. */
 function LiveReadouts() {
   const meter = useRef<HTMLDivElement>(null)
@@ -194,6 +215,7 @@ function LiveReadouts() {
             ]
         }
         if (call.current.textContent !== text) call.current.textContent = text
+        placeBesidePlayer(meter.current)
         if (call.current.dataset.state !== state) call.current.dataset.state = state
       }
       const kmh = Math.round(hudLive.lastShotKmh)
@@ -222,29 +244,38 @@ function LiveReadouts() {
   const goodLo = (SERVE.goodY[0] - SERVE.handHeight) / span
   return (
     <>
+      {/* Floats beside my player while I serve, where the eyes already are. */}
       <div className="serve-panel" ref={meter} data-stage="off" aria-live="polite">
-        <div className="serve-steps">
-          <span className="step aim">
-            <Key k="left" />
-            <Key k="right" /> step
-          </span>
-          <span className="step toss">hold a shot key to toss</span>
-          <span className="step hit">←/→ sweeps the aim · release in the zone</span>
+        <div className="serve-head">
+          <div className="serve-call" ref={call}>
+            Hold a shot key to toss
+          </div>
+          <div className="serve-hint">
+            <span className="hint aim">
+              <Key k="left" />
+              <Key k="right" /> step along the line
+            </span>
+            <span className="hint toss">
+              <Key k="left" />
+              <Key k="right" /> sweep the aim · release in the yellow
+            </span>
+          </div>
         </div>
-        <div className="serve-meter" aria-hidden>
-          <div className="serve-good" style={{ left: `${goodLo * 100}%`, width: `${(lo - goodLo) * 100}%` }} />
-          <div className="serve-perfect" style={{ left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }} />
-          <div className="serve-ball" ref={fill} />
-        </div>
-        <div className="serve-aim" aria-hidden title="Aim: hold ← or → to sweep it; past the lines is out">
-          <div className="aim-out left" style={{ width: `${outPct}%` }} />
-          <div className="aim-out right" style={{ width: `${outPct}%` }} />
-          <div className="aim-line" style={{ left: `${outPct}%` }} />
-          <div className="aim-line" style={{ right: `${outPct}%` }} />
-          <div className="aim-needle" ref={aimNeedle} />
-        </div>
-        <div className="serve-call" ref={call}>
-          Hold a shot key to toss
+        <div className="serve-bars">
+          <span className="bar-label">Toss</span>
+          <div className="serve-meter" aria-hidden>
+            <div className="serve-good" style={{ left: `${goodLo * 100}%`, width: `${(lo - goodLo) * 100}%` }} />
+            <div className="serve-perfect" style={{ left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` }} />
+            <div className="serve-ball" ref={fill} />
+          </div>
+          <span className="bar-label">Aim</span>
+          <div className="serve-aim" aria-hidden title="Aim: hold ← or → to sweep it; past the lines is out">
+            <div className="aim-out left" style={{ width: `${outPct}%` }} />
+            <div className="aim-out right" style={{ width: `${outPct}%` }} />
+            <div className="aim-line" style={{ left: `${outPct}%` }} />
+            <div className="aim-line" style={{ right: `${outPct}%` }} />
+            <div className="aim-needle" ref={aimNeedle} />
+          </div>
         </div>
         <div className="serve-keys">
           <span>
@@ -260,6 +291,9 @@ function LiveReadouts() {
             <Key k="R" /> safe
           </span>
         </div>
+      </div>
+      <div className="dock">
+        <Controls />
       </div>
       <div className="telemetry">
         <div className="tele-row" aria-label="Wind">
@@ -349,7 +383,6 @@ export function Hud() {
       <TimingGrade />
       <LiveReadouts />
       <Rally />
-      <Controls />
     </div>
   )
 }

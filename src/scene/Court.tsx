@@ -4,9 +4,9 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { CuboidCollider, RigidBody } from '@react-three/rapier'
 import { BALL, COURT } from '../game/constants'
 import { onFenceTouch } from '../game/director'
-import { grassTexture, radialTexture } from './textures'
+import { radialTexture } from './textures'
 import { DETAIL, detailSurfaceMaterial, macroMap, surfaceMaps, surfaceMaterial } from './surfaceTextures'
-import { PbrMaterial, WithFallback } from './PbrMaterial'
+import { WithFallback } from './PbrMaterial'
 import { preloadPbr, usePbr } from './photoTextures'
 import { useGame } from '../game/store'
 import type { SurfaceId as Surface } from '../physics/flight'
@@ -157,8 +157,8 @@ function Surfaces({ m }: { m: SurfaceMaterials }) {
   const lines = useMemo(linesGeometry, [])
   return (
     <>
-      {/* Run-off */}
-      <mesh rotation-x={-Math.PI / 2} position-y={0} receiveShadow>
+      {/* Run-off, a few mm below the playing area so the two never depth-fight far away */}
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.004} receiveShadow>
         <planeGeometry args={[COURT.fenceX * 2, COURT.fenceZ * 2]} />
         <primitive object={m.outer} attach="material" />
       </mesh>
@@ -184,57 +184,9 @@ function ProceduralSurfaces() {
   return <Surfaces m={useProceduralMaterials()} />
 }
 
-const LAWN = 600
-/** World x where the lawn meets the beach. */
-export const COAST_X = 120
-
-/** Grass beyond the fence: the grass court's detail under a duller, larger macro map. */
-function LawnMaterial() {
-  const detail = usePbr('court/grass')
-  const mat = useMemo(() => {
-    const m = detailSurfaceMaterial(detail, macroMap('lawn', LAWN), LAWN, LAWN, {
-      grainTile: 1.7,
-      roughTile: 2.6,
-      normalScale: 0,
-      roughness: 1.3,
-    })
-    // Seen from 15 m and further: blade relief is invisible there, so skip the normal lookup.
-    m.normalMap?.dispose()
-    m.normalMap = null
-    return m
-  }, [detail])
-  useEffect(() => () => mat.dispose(), [mat])
-  return <primitive object={mat} attach="material" />
-}
-
-const APRON: [number, number] = [COURT.fenceX * 2 + 16, COURT.fenceZ * 2 + 14]
-const PAVING_TILE = 2.8
-
 export function Court() {
-  const grass = useMemo(() => grassTexture(), [])
-
   return (
     <group>
-      {/* Grass beyond the fence */}
-      {/* Ends 120 m east of the court, where the beach and the bay begin (Backdrop). */}
-      <mesh rotation-x={-Math.PI / 2} position={[COAST_X - LAWN / 2, -0.02, 0]} receiveShadow>
-        <planeGeometry args={[LAWN, LAWN]} />
-        <WithFallback fallback={<meshStandardMaterial map={grass} roughness={1} color="#a8b893" />}>
-          <LawnMaterial />
-        </WithFallback>
-      </mesh>
-      {/* Paved apron around the venue */}
-      <mesh rotation-x={-Math.PI / 2} position-y={-0.01} receiveShadow>
-        <planeGeometry args={APRON} />
-        <WithFallback fallback={<meshStandardMaterial color="#c9bfae" roughness={0.95} />}>
-          <PbrMaterial
-            set="venue/paving"
-            repeat={[APRON[0] / PAVING_TILE, APRON[1] / PAVING_TILE]}
-            roughness={1.1}
-            envMapIntensity={0.4}
-          />
-        </WithFallback>
-      </mesh>
       <WithFallback fallback={<ProceduralSurfaces />}>
         <PhotoSurfaces />
       </WithFallback>

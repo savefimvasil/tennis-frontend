@@ -130,3 +130,21 @@ describe('flight model', () => {
     expect(apex).toBeLessThan(pace === 'club' ? 2.4 : 2.05)
   })
 })
+
+describe('mirrored flights (online line calls)', () => {
+  it('lands at exactly the mirrored point for the seat-1 view, wind included', async () => {
+    const { setWind, simulate } = await import('./flight')
+    const p = { x: 1.3, y: 1.0, z: 11 }
+    const v = { x: -2.1, y: 3.4, z: -27 }
+    const w = { x: -180, y: 12, z: 6 }
+    setWind(1.7, -0.9)
+    const a = simulate(p, v, w, { maxBounces: 1, maxT: 6 }).bounces[0]
+    setWind(-1.7, 0.9)
+    const m = (q: { x: number; y: number; z: number }) => ({ x: -q.x, y: q.y, z: -q.z })
+    const b = simulate(m(p), m(v), m(w), { maxBounces: 1, maxT: 6 }).bounces[0]
+    setWind(0, 0)
+    // The client judges a line ball in its own (mirrored) frame; it must agree with the server bit for bit.
+    expect(b.x).toBe(-a.x)
+    expect(b.z).toBe(-a.z)
+  })
+})

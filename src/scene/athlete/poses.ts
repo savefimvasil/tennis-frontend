@@ -1,8 +1,24 @@
+import { monotoneCubic } from './anim'
+
 // Procedural animation: joint rotations (Euler XYZ, radians) for a right-handed
 // athlete built facing +z. Arms and legs hang along -y at rest.
 // Shoulder/hip x < 0 swings the limb forward, z < 0 raises the right arm sideways.
 
-export const JOINTS = ['spine', 'neck', 'lSh', 'lEl', 'rSh', 'rEl', 'rWr', 'lHip', 'lKnee', 'rHip', 'rKnee'] as const
+export const JOINTS = [
+  'spine',
+  'neck',
+  'lSh',
+  'lEl',
+  'rSh',
+  'rEl',
+  'rWr',
+  'lHip',
+  'lKnee',
+  'lAnk',
+  'rHip',
+  'rKnee',
+  'rAnk',
+] as const
 export type Joint = (typeof JOINTS)[number]
 export type Euler3 = [number, number, number]
 
@@ -24,10 +40,11 @@ export const READY: Pose = makePose({
   j: {
     spine: [0.28, 0, 0],
     neck: [-0.22, 0, 0],
-    rSh: [-0.45, 0.1, -0.18],
+    // Elbows out from the body, so the arms read from behind (the game camera).
+    rSh: [-0.45, 0.3, -0.45],
     rEl: [-1.25, 0, 0],
     rWr: [0.3, 0, 0.9],
-    lSh: [-0.5, -0.1, 0.32],
+    lSh: [-0.5, -0.3, 0.6],
     lEl: [-1.25, 0, 0],
     lHip: [-0.45, 0, 0.06],
     rHip: [-0.45, 0, -0.06],
@@ -37,7 +54,7 @@ export const READY: Pose = makePose({
   lift: -0.09,
 })
 
-type Key = { t: number; pose: Pose }
+export type Key = { t: number; pose: Pose }
 
 function keys(list: [number, PartialPose][]): Key[] {
   return list.map(([t, p]) => ({ t, pose: makePose(mergeReady(p)) }))
@@ -98,18 +115,21 @@ export const FOREHAND = keys([
   [0.72, {}],
 ])
 
+// Two-handed backhand: both hands stay on the grip. The racket goes back by the left hip in
+// front of the body (not across it), is met with both arms long out in front, and finishes
+// with the hands by the right shoulder.
 export const BACKHAND = keys([
   [0, {}],
   [
     0.12,
     {
       j: {
-        spine: [0.22, 1.2, 0],
-        rSh: [0.1, 1.0, 0.55],
-        rEl: [-0.7, 0, 0],
-        rWr: [0, 0, -0.3],
-        lSh: [0.25, 0, 0.85],
-        lEl: [-0.6, 0, 0],
+        spine: [0.26, 1.2, 0],
+        rSh: [-0.6, 0.55, 0.62],
+        rEl: [-0.55, 0, 0],
+        rWr: [0.25, 0, -0.55],
+        lSh: [-0.55, 0, 0.12],
+        lEl: [-1.0, 0, 0],
       },
     },
   ],
@@ -117,11 +137,11 @@ export const BACKHAND = keys([
     0.2,
     {
       j: {
-        spine: [0.2, -0.15, 0],
-        rSh: [-0.6, 1.4, 0.6],
-        rEl: [-0.3, 0, 0],
-        rWr: [0, 0, -0.1],
-        lSh: [-0.55, 0, 0.95],
+        spine: [0.2, 0.05, 0],
+        rSh: [-0.95, 0.85, 0.32],
+        rEl: [-0.25, 0, 0],
+        rWr: [-0.55, 0, -0.1],
+        lSh: [-0.95, 0, -0.25],
         lEl: [-0.45, 0, 0],
       },
     },
@@ -130,17 +150,37 @@ export const BACKHAND = keys([
     0.36,
     {
       j: {
-        spine: [0.15, -1.1, 0],
-        rSh: [-2.2, 1.0, 0.3],
-        rEl: [-1.4, 0, 0],
-        rWr: [0.2, 0, -0.4],
-        lSh: [-2.0, 0, 0.2],
-        lEl: [-1.4, 0, 0],
+        spine: [0.14, -0.95, 0],
+        rSh: [-1.3, 0.45, 0.05],
+        rEl: [-1.85, 0, 0],
+        rWr: [0.35, 0, -0.3],
+        lSh: [-1.2, 0, -0.6],
+        lEl: [-1.7, 0, 0],
       },
     },
   ],
   [0.72, {}],
 ])
+
+/** Receiving the serve: low and wide, weight forward, racket out in front on both hands. */
+export const RECEIVE: Pose = makePose(
+  mergeReady({
+    j: {
+      spine: [0.55, 0, 0],
+      neck: [-0.48, 0, 0],
+      rSh: [-0.85, 0.35, -0.3],
+      rEl: [-1.3, 0, 0],
+      rWr: [0.35, 0, 1.05],
+      lSh: [-0.8, -0.3, 0.55],
+      lEl: [-1.3, 0, 0],
+      lHip: [-0.78, 0, 0.27],
+      rHip: [-0.78, 0, -0.27],
+      lKnee: [1.3, 0, 0],
+      rKnee: [1.3, 0, 0],
+    },
+    lift: -0.25,
+  }),
+)
 
 // Serve: trophy position by 0.5 s and held until the hit, which jumps time to 1.0.
 export const SERVE_KEYS = keys([
@@ -221,29 +261,40 @@ export const SERVE_KEYS = keys([
   [1.75, {}],
 ])
 
-function lerp(a: number, b: number, t: number) {
-  return a + (b - a) * t
+/** Key times and per-channel values of a track, laid out for the spline. */
+interface Channels {
+  ts: number[]
+  j: Record<Joint, [number[], number[], number[]]>
+  lift: number[]
 }
 
-function smooth(t: number) {
-  return t * t * (3 - 2 * t)
-}
+const channelCache = new WeakMap<Key[], Channels>()
 
-/** Samples a keyframe track at time t into `out`. */
-export function sampleTrack(track: Key[], t: number, out: Pose): Pose {
-  let i = 0
-  while (i < track.length - 2 && t > track[i + 1].t) i++
-  const a = track[i]
-  const b = track[i + 1]
-  const u = smooth(Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))))
-  for (const k of JOINTS) {
-    const ja = a.pose.j[k]
-    const jb = b.pose.j[k]
-    out.j[k][0] = lerp(ja[0], jb[0], u)
-    out.j[k][1] = lerp(ja[1], jb[1], u)
-    out.j[k][2] = lerp(ja[2], jb[2], u)
+function channels(track: Key[]): Channels {
+  let c = channelCache.get(track)
+  if (!c) {
+    const j = {} as Channels['j']
+    for (const k of JOINTS) j[k] = [0, 1, 2].map((i) => track.map((key) => key.pose.j[k][i])) as Channels['j'][Joint]
+    c = { ts: track.map((key) => key.t), j, lift: track.map((key) => key.pose.lift) }
+    channelCache.set(track, c)
   }
-  out.lift = lerp(a.pose.lift, b.pose.lift, u)
+  return c
+}
+
+/**
+ * Samples a keyframe track at time t into `out`. A monotone cubic spline per channel keeps the
+ * motion flowing through the keys (the racket is still moving at contact) while stopping at
+ * real turning points such as the end of the backswing, and never overshooting a key.
+ */
+export function sampleTrack(track: Key[], t: number, out: Pose): Pose {
+  const c = channels(track)
+  for (const k of JOINTS) {
+    const ch = c.j[k]
+    out.j[k][0] = monotoneCubic(c.ts, ch[0], t)
+    out.j[k][1] = monotoneCubic(c.ts, ch[1], t)
+    out.j[k][2] = monotoneCubic(c.ts, ch[2], t)
+  }
+  out.lift = monotoneCubic(c.ts, c.lift, t)
   return out
 }
 

@@ -100,9 +100,9 @@ Headless match simulations (`npm test`) with a scripted player:
 | pro | AI won | 2–4 |
 | ace | AI won | 0–4 |
 
-## 5. Further gameplay ideas (GTA-style), in order of value
+## 5. Further gameplay ideas, in order of value
 
-1. **Shot charge.** Holding the key longer adds power at the cost of accuracy; GTA's tennis works this way.
+1. **Shot charge.** Holding the key longer adds power at the cost of accuracy, as in many arcade tennis games.
 2. **Contact-zone ring.** A ground ring where the player should stand for the incoming ball, shown on
    easy only (the predictor already knows the point).
 3. **Stamina/momentum.** Long sprints reduce the next shot's pace, which rewards positioning.

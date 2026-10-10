@@ -368,48 +368,89 @@ label:focus-within {
   color: var(--lose);
 }
 
-.serve-panel {
-  /* Under the scoreboard, clear of the court and both players. */
+/* Bottom centre: the key hints (hidden while I serve). */
+.dock {
   position: absolute;
-  left: 20px;
-  top: 146px;
-  transform: translateY(-8px);
-  width: min(300px, calc(100% - 40px));
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
   display: grid;
-  gap: 9px;
-  padding: 12px 14px;
+  justify-items: center;
+}
+
+.serve-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  width: min(310px, calc(100% - 32px));
+  gap: 8px;
+  padding: 10px 14px 11px;
   background: var(--grain), var(--panel);
   backdrop-filter: blur(10px);
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
-  opacity: 0;
-  transition:
-    opacity 0.2s,
-    transform 0.2s;
+  animation: dock-in 0.2s ease-out;
 }
 
 .serve-panel[data-stage='aim'],
 .serve-panel[data-stage='toss'] {
-  opacity: 1;
-  transform: translateY(0);
+  display: grid;
 }
 
-.serve-steps {
-  display: grid;
-  gap: 4px;
-  font-family: var(--f-display);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* While serving, the serve panel replaces the rally key hints. */
+.hud:has(.serve-panel[data-stage='aim']) .controls,
+.hud:has(.serve-panel[data-stage='toss']) .controls {
+  display: none;
+}
+
+/* Opacity only: the panel's position is an inline transform. */
+@keyframes dock-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.serve-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 16px;
+  flex-wrap: wrap;
+}
+
+.serve-hint {
+  font-size: 13px;
   color: var(--muted);
 }
 
-.serve-panel[data-stage='aim'] .step.aim,
-.serve-panel[data-stage='aim'] .step.toss,
-.serve-panel[data-stage='toss'] .step.hit {
-  color: var(--ball);
+.serve-hint .hint {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.serve-panel[data-stage='aim'] .hint.aim,
+.serve-panel[data-stage='toss'] .hint.toss {
+  display: inline-flex;
+}
+
+.serve-bars {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 7px 10px;
+}
+
+.bar-label {
+  font-family: var(--f-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .serve-meter {
@@ -454,14 +495,13 @@ label:focus-within {
 }
 
 .serve-call {
-  text-align: left;
   font-family: var(--f-display);
   font-style: italic;
   font-weight: 800;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  min-height: 1.2em;
 }
 
 .serve-call[data-state='perfect'] {
@@ -474,14 +514,14 @@ label:focus-within {
 
 .serve-call[data-state='late'] {
   color: var(--lose);
-  font-size: 18px;
+  font-size: 17px;
 }
 
 .serve-keys {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   flex-wrap: wrap;
-  gap: 6px 14px;
+  gap: 6px 16px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -574,21 +614,18 @@ label:focus-within {
 }
 
 .controls {
-  position: absolute;
-  left: 20px;
-  bottom: 18px;
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   animation: controls-fade 1s ease 14s forwards;
-  gap: 8px 16px;
-  padding: 8px 14px;
+  gap: 6px 16px;
+  padding: 7px 14px;
   background: rgba(11, 20, 30, 0.6);
   backdrop-filter: blur(6px);
   border-radius: var(--radius);
   font-size: 13px;
   color: var(--muted);
-  max-width: min(360px, calc(100% - 32px));
 }
 
 /* The hint fades once the player has had time to read it. */
@@ -604,29 +641,32 @@ label:focus-within {
   position: fixed;
   inset: 0;
   display: flex;
-  justify-content: flex-start;
-  padding: 24px clamp(16px, 6vw, 90px);
-  background: radial-gradient(
-    120% 90% at 0% 50%,
-    rgba(8, 14, 22, 0.92) 0%,
-    rgba(8, 14, 22, 0.6) 55%,
-    rgba(8, 14, 22, 0.12) 100%
-  );
+  justify-content: center;
+  padding: clamp(16px, 4vh, 40px) clamp(16px, 5vw, 64px);
   overflow-y: auto;
 }
 
+/* The court stays visible around the edges; the middle is darkened for the text. */
+.overlay.menu {
+  background: radial-gradient(
+    90% 80% at 50% 50%,
+    rgba(8, 14, 22, 0.86) 0%,
+    rgba(8, 14, 22, 0.6) 60%,
+    rgba(8, 14, 22, 0.25) 100%
+  );
+}
+
 .overlay.dim {
-  justify-content: center;
   background: rgba(8, 14, 22, 0.58);
   backdrop-filter: blur(6px);
 }
 
 .menu-grid {
-  margin-block: auto;
-  width: min(1100px, 100%);
+  margin: auto;
+  width: min(1120px, 100%);
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  gap: clamp(20px, 4vw, 56px);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(24px, 4vw, 56px);
   align-items: center;
 }
 
@@ -639,7 +679,7 @@ label:focus-within {
 
 .settings {
   padding: 18px 20px;
-  background: var(--grain), linear-gradient(160deg, rgba(18, 31, 45, 0.82), rgba(10, 18, 27, 0.82));
+  background: var(--grain), linear-gradient(160deg, rgba(18, 31, 45, 0.86), rgba(10, 18, 27, 0.86));
   backdrop-filter: blur(14px);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -649,15 +689,155 @@ label:focus-within {
 .settings-inner {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
-@media (max-width: 900px) {
+.settings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.settings-head h3 {
+  margin: 0;
+}
+
+.settings-rule {
+  height: 1px;
+  background: var(--line);
+  margin: 2px 0;
+}
+
+@media (max-width: 960px) {
   .menu-grid {
     grid-template-columns: minmax(0, 1fr);
+    width: min(620px, 100%);
     gap: 18px;
     align-items: start;
   }
+}
+
+/* Short windows (laptops with browser chrome): drop the option notes and the tagline. */
+@media (max-height: 760px) {
+  .choice-note,
+  .lede {
+    display: none;
+  }
+  .choice label {
+    padding: 7px 10px;
+  }
+}
+
+/* ---------------------------------------------------------------- mode cards */
+
+.modes {
+  display: grid;
+  gap: 10px;
+}
+
+.mode {
+  position: relative;
+  overflow: hidden;
+  justify-content: flex-start;
+  gap: 14px;
+  min-height: 76px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  text-align: left;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+
+.mode-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  font-size: 26px;
+}
+
+.mode-text {
+  flex: 1;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mode-title {
+  font-family: var(--f-display);
+  font-size: 26px;
+  font-weight: 800;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mode-sub {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.mode.cpu {
+  background: linear-gradient(180deg, #e4f765, var(--ball));
+  color: var(--ball-ink);
+  border-color: transparent;
+  box-shadow:
+    0 10px 28px rgba(216, 240, 60, 0.28),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.12);
+}
+
+.mode.cpu .mode-icon {
+  background: rgba(19, 25, 10, 0.12);
+}
+
+.mode.cpu .mode-sub {
+  color: rgba(19, 25, 10, 0.72);
+}
+
+.mode.cpu .key {
+  color: var(--ball-ink);
+  background: rgba(255, 255, 255, 0.45);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* Light sweep across the main button. */
+.mode.cpu::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  animation: sweep 3.2s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+
+.mode.online {
+  background: linear-gradient(160deg, #1d6fb8, #0f3f73);
+  border-color: rgba(125, 200, 255, 0.55);
+  box-shadow:
+    0 10px 28px rgba(56, 150, 248, 0.3),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+}
+
+.mode.online:hover {
+  border-color: rgba(160, 215, 255, 0.95);
+}
+
+.mode.online .mode-icon {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.mode.online .mode-sub {
+  color: rgba(225, 240, 255, 0.85);
 }
 
 .eyebrow {
@@ -677,8 +857,8 @@ label:focus-within {
   font-family: var(--f-display);
   font-style: italic;
   font-weight: 800;
-  font-size: clamp(60px, 9vw, 112px);
-  line-height: 0.82;
+  font-size: clamp(56px, min(8vw, 13vh), 108px);
+  line-height: 0.84;
   text-transform: uppercase;
   letter-spacing: -0.01em;
   text-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
@@ -1169,6 +1349,14 @@ h3 {
   color: var(--text);
 }
 
+/* Narrow windows: wind and speed move up so they clear the dock. */
+@media (max-width: 1000px) {
+  .telemetry {
+    top: 72px;
+    bottom: auto;
+  }
+}
+
 @media (max-width: 640px) {
   .scoreboard {
     min-width: 0;
@@ -1205,6 +1393,7 @@ h3 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .mode.cpu::after,
   .primary::after,
   .controls {
     animation: none;
@@ -1212,32 +1401,6 @@ h3 {
 }
 
 /* ---------------------------------------------------------------- online */
-
-.online-btn {
-  position: relative;
-  overflow: hidden;
-  justify-content: flex-start;
-  background: linear-gradient(180deg, rgba(56, 189, 248, 0.22), rgba(56, 189, 248, 0.1));
-  color: var(--text);
-  border: 1px solid rgba(56, 189, 248, 0.55);
-  border-radius: 8px;
-  padding: 12px 18px;
-  font-family: var(--f-display);
-  font-size: 21px;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.online-btn span {
-  flex: 1;
-  text-align: left;
-}
-
-.online-btn:hover {
-  border-color: rgba(56, 189, 248, 0.9);
-}
 
 .live-dot {
   width: 9px;

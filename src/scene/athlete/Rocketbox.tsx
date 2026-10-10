@@ -40,10 +40,10 @@ const MAP: Record<string, Source> = {
   Bip01_L_Hand: { joint: 'lEl' },
   Bip01_L_Thigh: { joint: 'lHip' },
   Bip01_L_Calf: { joint: 'lKnee' },
-  Bip01_L_Foot: { joint: 'lKnee' },
+  Bip01_L_Foot: { joint: 'lAnk' },
   Bip01_R_Thigh: { joint: 'rHip' },
   Bip01_R_Calf: { joint: 'rKnee' },
-  Bip01_R_Foot: { joint: 'rKnee' },
+  Bip01_R_Foot: { joint: 'rAnk' },
 }
 
 /** Bones whose rest direction (towards `child`) is rotated to hang straight down. */
@@ -70,6 +70,9 @@ export interface RocketboxHandle {
   shoulder(out: THREE.Vector3): THREE.Vector3
   /** World position of the racket hand (wrist joint). */
   hand(out: THREE.Vector3): THREE.Vector3
+  /** World positions of the free arm's shoulder and hand. */
+  leftShoulder(out: THREE.Vector3): THREE.Vector3
+  leftHand(out: THREE.Vector3): THREE.Vector3
 }
 
 /** String-bed centre in racket-local space (see Racket.tsx: head at -0.47 under a +0.06 offset). */
@@ -308,7 +311,11 @@ export function RocketboxBody({
       if (bodyMap !== tex.body) bodyMap.dispose()
     }
     const shoulderBone = scene.getObjectByName('Bip01_R_UpperArm')!
+    const leftShoulderBone = scene.getObjectByName('Bip01_L_UpperArm')!
+    const leftHandBone = scene.getObjectByName('Bip01_L_Hand')!
     return {
+      leftShoulderBone,
+      leftHandBone,
       scene,
       driven,
       hips,
@@ -378,6 +385,12 @@ export function RocketboxBody({
       },
       hand(out) {
         return rig.handBone.getWorldPosition(out)
+      },
+      leftShoulder(out) {
+        return rig.leftShoulderBone.getWorldPosition(out)
+      },
+      leftHand(out) {
+        return rig.leftHandBone.getWorldPosition(out)
       },
     }),
     [rig],

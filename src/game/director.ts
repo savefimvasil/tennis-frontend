@@ -728,6 +728,21 @@ function onBounce(p: V3, vy: number) {
   const hitter = sim.lastHitter
   if (hitter === null || sim.phase === 'dead' || sim.phase === 'idle') return
   const receiver = other(hitter)
+  // Online the server rules on its own model of the flight. Rapier's bounce point can sit a few
+  // centimetres away from it, so a line ball could be "out" here and "in" on the server: this
+  // client then froze while the server waited for the return and gave the hitter a winner.
+  // Judge the first bounce where the server's model puts it; with no server flight, never freeze.
+  if (online && sim.bounces === 1) {
+    const at = serverBounce()
+    if (!at) {
+      sim.firstBounce = { x: p.x, z: p.z }
+      if (sim.phase === 'serve') sim.phase = 'rally'
+      sim.landing = null
+      predictFromBall()
+      return
+    }
+    p = { x: at.x, y: p.y, z: at.z }
+  }
   const half: Side = p.z >= 0 ? HUMAN : AI
 
   if (sim.phase === 'serve') {
@@ -984,6 +999,17 @@ function setBall(b: BallState) {
   sim.prevVy = b.v.y
 }
 
+/**
+ * First bounce of the current flight as the server simulates it (same flight code, same start
+ * state, wind and surface), in this client's frame. Null when the flight is not known yet.
+ */
+function serverBounce(): { x: number; z: number } | null {
+  const auth = online?.auth
+  if (!auth || auth.hit !== sim.hits) return null
+  const b = simulate(auth.ball.p, auth.ball.v, auth.ball.w, { maxBounces: 1, maxT: 6 }).bounces[0]
+  return b ? { x: b.x, z: b.z } : null
+}
+
 /** The server's ball state, fast-forwarded to now. */
 function authNow(): BallState | null {
   if (!online?.auth) return null
@@ -1137,8 +1163,10 @@ function updateRemote(dt: number) {
     const k = b.t > prev.t ? Math.max(0, Math.min(1, (t - prev.t) / (b.t - prev.t))) : 1
     a.x = prev.x + (b.x - prev.x) * k
     a.z = prev.z + (b.z - prev.z) * k
-    a.vx = b.vx
-    a.vz = b.vz
+    // Interpolate the velocity too: the animation reads it (gait, lean), and stepping it per
+    // packet made the remote player's legs and body twitch.
+    a.vx = prev.vx + (b.vx - prev.vx) * k
+    a.vz = prev.vz + (b.vz - prev.vz) * k
     a.yaw = b.yaw
   }
   // Swing animation from the opponent's own updates, unless a strike or toss just set it.

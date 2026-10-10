@@ -13,6 +13,25 @@ export interface Toast {
   tone: 'win' | 'lose' | 'neutral'
 }
 
+export type FpsCap = '60' | '30'
+
+/** Graphics choices survive a reload; storage can be unavailable (private mode), so it is optional. */
+function saved<T extends string>(key: string, allowed: T[], fallback: T): T {
+  try {
+    const v = localStorage.getItem(`tennis.${key}`)
+    return v && (allowed as string[]).includes(v) ? (v as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(`tennis.${key}`, value)
+  } catch {
+    // Not persisted; the setting still applies for this session.
+  }
+}
+
 export type Quality = 'high' | 'medium' | 'low'
 
 interface GameStore {
@@ -24,6 +43,8 @@ interface GameStore {
   difficulty: Difficulty
   format: FormatId
   quality: Quality
+  /** Frame-rate cap in play: 30 halves the GPU work (quieter fans, longer battery). */
+  fps: FpsCap
   pace: PaceId
   surface: SurfaceId
   /** Player's character/outfit id (see scene/athlete/skins.ts). */
@@ -37,6 +58,7 @@ interface GameStore {
   setDifficulty(d: Difficulty): void
   setFormat(f: FormatId): void
   setQuality(q: Quality): void
+  setFps(f: FpsCap): void
   setPace(p: PaceId): void
   setSurface(s: SurfaceId): void
   setSkin(s: string): void
@@ -78,7 +100,8 @@ export const useGame = create<GameStore>((set, get) => ({
   opponentName: 'R. Okafor',
   difficulty: 'pro',
   format: 'quick',
-  quality: 'medium',
+  quality: saved('quality', ['high', 'medium', 'low'], 'medium'),
+  fps: saved('fps', ['60', '30'], '60'),
   pace: 'club',
   surface: 'hard',
   skin: 'navy',
@@ -90,7 +113,14 @@ export const useGame = create<GameStore>((set, get) => ({
   stats: freshStats(),
   setDifficulty: (difficulty) => set({ difficulty }),
   setFormat: (format) => set({ format }),
-  setQuality: (quality) => set({ quality }),
+  setQuality: (quality) => {
+    save('quality', quality)
+    set({ quality })
+  },
+  setFps: (fps) => {
+    save('fps', fps)
+    set({ fps })
+  },
   setPace: (pace) => set({ pace }),
   setSurface: (surface) => {
     setSurface(surface)
@@ -190,4 +220,6 @@ export const hudLive = {
   tossFalling: false,
   /** Serve aim during the toss: 0 middle of the box, +-1 the lines, beyond is out. */
   serveAim: 0,
+  /** Where my server stands on screen (CSS px), so the serve meter can sit beside them. */
+  serveAnchor: { x: 0, y: 0, ok: false },
 }

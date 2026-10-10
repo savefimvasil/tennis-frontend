@@ -8,15 +8,21 @@ export interface ShotSpec {
   netClearance: number
   /** Default depth: distance from the net to the aim point (m). */
   depth: number
+  /** Fixed launch angle (rad): the solver finds the speed instead (lob, slice). */
   lobPitch?: number
 }
 
 export const SHOTS: Record<ShotType, ShotSpec> = {
-  // Pro forehands: ~30 m/s, ~2500 rpm, crossing the net 0.9-1.5 m above the tape.
-  topspin: { speed: 30, spin: 230, netClearance: 0.4, depth: 9.2 },
-  slice: { speed: 26, spin: -150, netClearance: 0.22, depth: 8.6 },
+  // Four shapes, not four speeds of the same shot:
+  // - topspin: ~2700 rpm, a high arc 1-1.4 m over the tape, dips in deep and kicks up high;
+  // - slice: backspin on a fixed low launch, skims ~0.3 m over the tape to mid-court and
+  //   stays low and slows after the bounce (as a speed-solved shot it used to float long);
+  // - flat: the fastest and lowest, deepest, skidding through;
+  // - lob: high and deep over the net player.
+  topspin: { speed: 30, spin: 280, netClearance: 0.55, depth: 9.6 },
+  slice: { speed: 25, spin: -260, netClearance: 0.28, depth: 8.0, lobPitch: 0.07 },
   lob: { speed: 0, spin: 110, netClearance: 2.2, depth: 9.8, lobPitch: 0.9 },
-  flat: { speed: 36, spin: 70, netClearance: 0.18, depth: 9.6 },
+  flat: { speed: 37, spin: 50, netClearance: 0.15, depth: 10.2 },
 }
 
 /**
