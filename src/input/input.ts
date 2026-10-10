@@ -137,6 +137,19 @@ export function flushInput() {
   pauseQ = false
 }
 
+/**
+ * Start on any pad, edge-triggered. The game loop only reads the pad while playing, so the
+ * pause menu polls this to let Start resume.
+ */
+export function padStartPressed(): boolean {
+  const pads = navigator.getGamepads?.() ?? []
+  let down = false
+  for (const pad of pads) if (pad?.buttons[9]?.pressed) down = true
+  const edge = down && !padStartHeld
+  padStartHeld = down
+  return edge
+}
+
 /** Pause is polled outside the physics loop so it still works while paused. */
 export function consumePause(): boolean {
   const p = pauseQ

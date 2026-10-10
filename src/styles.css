@@ -338,6 +338,35 @@ label:focus-within {
   text-transform: uppercase;
 }
 
+.serve-speed-anchor {
+  position: absolute;
+  top: 18%;
+  left: 0;
+  right: 0;
+  display: grid;
+  justify-items: center;
+  pointer-events: none;
+}
+
+.serve-speed {
+  font-family: var(--f-display);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 22px;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 4px 14px;
+  border-radius: 6px;
+  background: rgba(12, 16, 22, 0.62);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.serve-speed b {
+  font-size: 34px;
+  color: var(--ball);
+  margin-right: 4px;
+}
+
 .grade-anchor {
   position: absolute;
   bottom: 24%;

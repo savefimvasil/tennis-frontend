@@ -6,7 +6,7 @@ import { GameOver, MainMenu, PauseMenu } from './ui/Menu'
 import { OnlineLobby } from './ui/Online'
 import { startNet } from './net/net'
 import { useGame } from './game/store'
-import { installInput, flushInput } from './input/input'
+import { installInput, flushInput, padStartPressed } from './input/input'
 import { setMuted } from './audio/sound'
 import { LAB_ENABLED } from './lab/lab'
 
@@ -33,7 +33,20 @@ export default function App() {
     const onBlur = () => useGame.getState().mode === 'solo' && useGame.getState().pause()
     window.addEventListener('keydown', onKey)
     window.addEventListener('blur', onBlur)
+    // A pad's Start resumes from the pause menu (the game loop is stopped there).
+    let raf = 0
+    const pollPad = () => {
+      raf = requestAnimationFrame(pollPad)
+      const st = useGame.getState()
+      if (st.screen !== 'paused') return
+      if (padStartPressed()) {
+        flushInput()
+        st.resume()
+      }
+    }
+    raf = requestAnimationFrame(pollPad)
     return () => {
+      cancelAnimationFrame(raf)
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('blur', onBlur)
     }

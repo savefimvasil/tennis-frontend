@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AI } from '../game/constants'
+import { AI, halfSign, other } from '../game/constants'
+import { serverXSign } from '../game/shot'
+import { inServiceBox, inSinglesCourt } from '../physics/flight'
 import { sim } from '../game/sim'
 import { useGame } from '../game/store'
 import { playApplause, playBounce, playFence, playGroan, playHit, playNet } from '../audio/sound'
@@ -45,9 +47,18 @@ function LandingMarker() {
     const grow = Math.min(1, age * 4)
     group.current.scale.setScalar(pulse * (0.4 + grow * 0.6))
     const incoming = sim.lastHitter === AI
-    ring.current.color.set(incoming ? '#ffe14d' : '#ffffff')
-    ring.current.opacity = incoming ? 0.95 : 0.45
-    dot.current.opacity = incoming ? 0.9 : 0.35
+    // Red when the ball is heading out (or out of the box on a serve): leave it, or learn the line.
+    const hitter = sim.lastHitter
+    const zSign = hitter ? halfSign(other(hitter)) : 1
+    const out = !hitter
+      ? false
+      : sim.phase === 'serve'
+        ? !inServiceBox(l.x, l.z, zSign, -serverXSign(hitter, sim.deuceCourt) as 1 | -1)
+        : !inSinglesCourt(l.x, l.z, zSign)
+    ring.current.color.set(out ? '#ff4d4d' : incoming ? '#ffe14d' : '#ffffff')
+    dot.current.color.set(out ? '#ff4d4d' : '#ffe14d')
+    ring.current.opacity = incoming || out ? 0.95 : 0.45
+    dot.current.opacity = incoming || out ? 0.9 : 0.35
   })
   return (
     <group ref={group} rotation-x={-Math.PI / 2} renderOrder={3}>

@@ -3,6 +3,7 @@ import { awardPoint, FORMATS, newMatch, type FormatId, type MatchState, type Poi
 import type { Side } from './constants'
 import type { Difficulty, Grade, PaceId } from './tuning'
 import { setSurface, type SurfaceId } from '../physics/flight'
+import { SKINS } from '../scene/athlete/skins'
 
 export type Screen = 'menu' | 'online' | 'playing' | 'paused' | 'over'
 
@@ -15,7 +16,7 @@ export interface Toast {
 
 export type FpsCap = '60' | '30'
 
-/** Graphics choices survive a reload; storage can be unavailable (private mode), so it is optional. */
+/** Settings survive a reload; storage can be unavailable (private mode), so it is optional. */
 function saved<T extends string>(key: string, allowed: T[], fallback: T): T {
   try {
     const v = localStorage.getItem(`tennis.${key}`)
@@ -53,6 +54,8 @@ interface GameStore {
   serveNumber: 1 | 2
   toast: Toast | null
   timing: { id: number; grade: Grade } | null
+  /** The last serve's speed, flashed big on screen. */
+  serveFlash: { id: number; kmh: number } | null
   muted: boolean
   stats: { winners: [number, number]; aces: [number, number]; errors: [number, number]; rally: number; longest: number }
   setDifficulty(d: Difficulty): void
@@ -73,6 +76,7 @@ interface GameStore {
   setServeNumber(n: 1 | 2): void
   showToast(title: string, tone: Toast['tone'], detail?: string): void
   showTiming(grade: Grade): void
+  showServeSpeed(kmh: number): void
   setRally(n: number): void
   /** Starts an online match with the room's settings; the score then comes from the server. */
   startOnline(opts: { format: FormatId; surface: SurfaceId; pace: PaceId; opponent: string; match: MatchState }): void
@@ -90,6 +94,10 @@ interface GameStore {
 
 let seq = 1
 
+const SKIN_IDS = SKINS.map((s) => s.id)
+const initialSurface = saved<SurfaceId>('surface', ['hard', 'clay', 'grass'], 'hard')
+setSurface(initialSurface)
+
 function freshStats(): GameStore['stats'] {
   return { winners: [0, 0], aces: [0, 0], errors: [0, 0], rally: 0, longest: 0 }
 }
@@ -98,21 +106,28 @@ export const useGame = create<GameStore>((set, get) => ({
   screen: 'menu',
   mode: 'solo',
   opponentName: 'R. Okafor',
-  difficulty: 'pro',
-  format: 'quick',
+  difficulty: saved('difficulty', ['easy', 'pro', 'ace'], 'pro'),
+  format: saved('format', Object.keys(FORMATS) as FormatId[], 'quick'),
   quality: saved('quality', ['high', 'medium', 'low'], 'medium'),
   fps: saved('fps', ['60', '30'], '60'),
-  pace: 'club',
-  surface: 'hard',
-  skin: 'navy',
+  pace: saved('pace', ['club', 'tour'], 'club'),
+  surface: initialSurface,
+  skin: saved('skin', SKIN_IDS, 'navy'),
   match: newMatch(FORMATS.quick, 0),
   serveNumber: 1,
   toast: null,
   timing: null,
-  muted: false,
+  serveFlash: null,
+  muted: saved('muted', ['1', '0'], '0') === '1',
   stats: freshStats(),
-  setDifficulty: (difficulty) => set({ difficulty }),
-  setFormat: (format) => set({ format }),
+  setDifficulty: (difficulty) => {
+    save('difficulty', difficulty)
+    set({ difficulty })
+  },
+  setFormat: (format) => {
+    save('format', format)
+    set({ format })
+  },
   setQuality: (quality) => {
     save('quality', quality)
     set({ quality })
@@ -121,13 +136,24 @@ export const useGame = create<GameStore>((set, get) => ({
     save('fps', fps)
     set({ fps })
   },
-  setPace: (pace) => set({ pace }),
+  setPace: (pace) => {
+    save('pace', pace)
+    set({ pace })
+  },
   setSurface: (surface) => {
+    save('surface', surface)
     setSurface(surface)
     set({ surface })
   },
-  setSkin: (skin) => set({ skin }),
-  toggleMute: () => set({ muted: !get().muted }),
+  setSkin: (skin) => {
+    save('skin', skin)
+    set({ skin })
+  },
+  toggleMute: () => {
+    const muted = !get().muted
+    save('muted', muted ? '1' : '0')
+    set({ muted })
+  },
   start: () =>
     set({
       mode: 'solo',
@@ -164,6 +190,7 @@ export const useGame = create<GameStore>((set, get) => ({
   },
   setServeNumber: (serveNumber) => set({ serveNumber }),
   showToast: (title, tone, detail) => set({ toast: { id: seq++, title, tone, detail } }),
+  showServeSpeed: (kmh) => set({ serveFlash: { id: seq++, kmh } }),
   showTiming: (grade) => set({ timing: { id: seq++, grade } }),
   setRally: (rally) => set({ stats: { ...get().stats, rally } }),
   startOnline: ({ format, surface, pace, opponent, match }) => {

@@ -132,6 +132,28 @@ function ToastCard({ title, detail, tone }: { title: string; detail?: string; to
   )
 }
 
+/** The serve's speed, big and brief, the way a broadcast shows it. */
+function ServeSpeed() {
+  const flash = useGame((s) => s.serveFlash)
+  return (
+    <div className="serve-speed-anchor">
+      <AnimatePresence>
+        {flash ? (
+          <motion.div
+            key={flash.id}
+            className="serve-speed"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: [0, 1, 1, 0], y: [-8, 0, 0, -4] }}
+            transition={{ duration: 2.2, times: [0, 0.08, 0.8, 1] }}
+          >
+            <b>{flash.kmh}</b> km/h
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 function TimingGrade() {
   const timing = useGame((s) => s.timing)
   return (
@@ -381,6 +403,7 @@ export function Hud() {
       </div>
       <Toast />
       <TimingGrade />
+      <ServeSpeed />
       <LiveReadouts />
       <Rally />
     </div>

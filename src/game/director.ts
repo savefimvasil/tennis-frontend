@@ -246,7 +246,10 @@ function strike(
   // The opponent split-steps as the ball is struck.
   sim.athletes[other(side)].split = 0.32
   if (!serve) useGame.getState().setRally(sim.hits)
-  else useGame.getState().setRally(1)
+  else {
+    useGame.getState().setRally(1)
+    useGame.getState().showServeSpeed(Math.round(speed * 3.6))
+  }
   aiLetGo = false
   if (side === HUMAN) {
     const ai = sim.athletes[AI]
@@ -1097,6 +1100,8 @@ export function onlineStrike(s: StrikeResolved) {
   sim.landing = { x: landing.x, z: landing.z, t: sim.time }
   predictFromBall()
   hudLive.lastShotKmh = s.speed * 3.6
+  // The first strike of a point is the serve.
+  if (s.hit === 1) useGame.getState().showServeSpeed(Math.round(s.speed * 3.6))
   pushEvent({ kind: 'hit', x: ball.p.x, y: ball.p.y, z: ball.p.z, power: Math.min(1, s.speed / 50) })
   const a = sim.athletes[AI]
   const elapsed = Math.max(0, (online.now() - s.t) / 1000)
