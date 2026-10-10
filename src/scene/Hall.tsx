@@ -8,7 +8,7 @@ import { glulam, membrane, planks as plankSet, repeated } from './proceduralMate
 
 // An indoor court under a timber gridshell, in the evening: glulam lattice over a white
 // membrane, rows of floodlights hung below it, a low wall of wood panels with a band of open
-// windows onto a lawn and trees at dusk, and arched end walls of translucent panels between
+// windows onto a lawn and trees at dusk, and arched end walls glazed like the windows, between
 // timber mullions. The light comes from many fittings overhead, so shadows are short and soft.
 
 /** Inner wall faces sit just outside the ball's fence colliders. */
@@ -158,6 +158,16 @@ function Vault() {
 
 // ------------------------------------------------------------------ walls
 
+/** Clear glazing, the same for the window band and the arched end walls: the dusk shows through. */
+const GLASS = new THREE.MeshStandardMaterial({
+  color: '#a9bcd8',
+  transparent: true,
+  opacity: 0.14,
+  roughness: 0.05,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+})
+
 /** One wall run: wood panels, a band of windows with mullions, and the ring beam over it. */
 function WallRun({
   length,
@@ -193,6 +203,9 @@ function WallRun({
         <boxGeometry args={[length, 0.06, 0.18]} />
         <meshStandardMaterial color="#c9c9c4" metalness={0.5} roughness={0.4} />
       </mesh>
+      <mesh position-y={(PANEL_H + WINDOW_TOP) / 2} material={GLASS}>
+        <planeGeometry args={[length, WINDOW_TOP - PANEL_H]} />
+      </mesh>
       <instancedMesh ref={mullions} args={[undefined, undefined, count]}>
         <boxGeometry args={[0.08, WINDOW_TOP - PANEL_H, 0.1]} />
         <meshStandardMaterial color="#b9bcbe" metalness={0.6} roughness={0.35} />
@@ -206,10 +219,9 @@ function WallRun({
   )
 }
 
-/** Arched end wall above the ring beam: translucent panels between timber mullions. */
+/** Arched end wall above the ring beam: glazing between timber mullions, like the windows below. */
 function EndWall({ z }: { z: number }) {
   const facing = z < 0 ? 0 : Math.PI
-  const panel = useMemo(() => repeated(membrane(), 0.5, 0.5), [])
   const geo = useMemo(() => {
     const shape = new THREE.Shape()
     shape.moveTo(-WX, SPRING)
@@ -248,10 +260,7 @@ function EndWall({ z }: { z: number }) {
   }, [xs])
   return (
     <group position-z={z} rotation-y={facing}>
-      <mesh geometry={geo}>
-        {/* Translucent panels with the dusk behind them. */}
-        <meshStandardMaterial {...panel} color="#8d97ad" emissive="#3b4f7a" emissiveIntensity={0.55} />
-      </mesh>
+      <mesh geometry={geo} material={GLASS} />
       <instancedMesh ref={posts} args={[undefined, undefined, xs.length + 1]}>
         <boxGeometry args={[0.16, 1, 0.16]} />
         <meshStandardMaterial {...glulam(3)} />
