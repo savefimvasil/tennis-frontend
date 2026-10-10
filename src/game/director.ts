@@ -39,6 +39,8 @@ let serveAim = 0
 let pendingAfterDead: 'serve' | 'none' = 'serve'
 let aiLetGo = false
 let netRepredictAt = 0
+/** The current flight since the last stroke, every other step (for the Hawk-Eye replay). */
+const flightPath: { x: number; y: number; z: number }[] = []
 /** Timing grade of the player's last rally shot (practice counts the well-timed ones). */
 let lastHumanGrade: Grade = 'good'
 /** Out by less than this (m) and the call is reviewed on screen. */
@@ -191,7 +193,7 @@ function outBy(x: number, z: number, zSign: 1 | -1, boxX?: 1 | -1): string {
         : over === long
           ? { axis: 'z' as const, value: zSign * depth }
           : { axis: 'x' as const, value: 0 }
-    sim.review = { x, z, ...line, cm }
+    sim.review = { x, z, ...line, cm, path: [...flightPath, { x, y: BALL.radius, z }] }
   }
   return cm >= 100 ? `${(cm / 100).toFixed(1)} m out` : `${cm} cm out`
 }
@@ -267,6 +269,7 @@ function strike(
   ball.setLinvel(sol.v, true)
   ball.setAngvel(sol.w, true)
   sim.lastHitter = side
+  flightPath.length = 0
   if (side === HUMAN) {
     const spec = AI_LEVELS[st.difficulty]
     aiReadError = (Math.random() + Math.random() + Math.random() - 1.5) * 1.4 * spec.readNoise
@@ -916,6 +919,10 @@ export function stepGame(dt: number) {
   // The ball: one step of the shared flight model, and whatever it touched on the way.
   if (!sim.held) {
     ball.step(dt)
+    if (Math.round(sim.time / dt) % 2 === 0) {
+      flightPath.push(ball.translation())
+      if (flightPath.length > 120) flightPath.shift()
+    }
     const ev = ball.events
     if (ev.net) onNetTouch()
     if (ev.fence) onFenceTouch()

@@ -76,6 +76,8 @@ export const sim = {
     axis: 'x' | 'z'
     value: number
     cm: number
+    /** The ball's flight from the stroke down to this bounce, for drawing its path. */
+    path: { x: number; y: number; z: number }[]
   } | null,
   netTouched: false,
   receiverTouched: false,

@@ -27,14 +27,19 @@ export function CameraRig() {
       pos.set(Math.sin(t) * 9.5, 5 + Math.sin(t * 2) * 0.8, Math.cos(t) * 17)
       look.set(0, 0.5, 0)
     } else if (sim.review) {
-      // Hawk-Eye: low over the mark, looking along the line it was judged against.
+      // Hawk-Eye: from the side of the ball's path, a little behind the bounce, so the last of the
+      // flight comes down into frame onto the mark.
       const r = sim.review
-      const along = r.axis === 'x' ? new THREE.Vector3(0, 0, -Math.sign(r.z) || -1) : new THREE.Vector3(1, 0, 0)
-      const out =
-        r.axis === 'x' ? new THREE.Vector3(Math.sign(r.value) || 1, 0, 0) : new THREE.Vector3(0, 0, Math.sign(r.value))
-      pos.set(r.x, 0, r.z).addScaledVector(along, -1.6).addScaledVector(out, -0.9)
-      pos.y = 1.25
-      look.set(r.x, 0.02, r.z)
+      const from = r.path[Math.max(0, r.path.length - 12)] ?? r
+      let dx = r.x - from.x
+      let dz = r.z - from.z
+      const len = Math.hypot(dx, dz) || 1
+      dx /= len
+      dz /= len
+      // Side on the court's inside, so the camera stays within the venue.
+      const side = -Math.sign(r.x * dz - r.z * dx) || 1
+      pos.set(r.x - dx * 2.6 + dz * 3.4 * side, 1.7, r.z - dz * 2.6 - dx * 3.4 * side)
+      look.set(r.x - dx * 1.4, 0.35, r.z - dz * 1.4)
     } else {
       const a = sim.athletes[0]
       // Trail behind and above the player, leaning toward the ball side.
