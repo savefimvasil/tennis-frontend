@@ -86,6 +86,14 @@ the four ball kids and their shadows.
 - **Town**: walls in whitewash, sand, ochre and faded terracotta.
 - **Grade**: a little saturation after the AgX tone mapping, which washes colours out.
 
+## Neighbourhood court
+
+The venue is a city court rather than a stadium, in the spirit of GTA's public courts: a
+2.7 m windscreen all round so the court feels enclosed and most of the outside is hidden,
+warm string lights sagging along the top rail of both long sides, the players' benches, and
+one small three-row bleacher by the net with a dozen or so friends watching. The two big
+stands (several hundred spectators), the chair umpire and the ball kids are gone.
+
 ## Performance pass
 
 Measured in a rally (dev build, per frame): all the game logic (physics at 120 Hz, the

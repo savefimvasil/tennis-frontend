@@ -14,14 +14,14 @@ import {
 import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { metreUvs } from './photoTextures'
 import { Crowd, type Seat } from './Crowd'
-import { Officials } from './Officials'
 import { Backdrop, CloudDome } from './Backdrop'
 import { FarField } from './FarField'
 
 const FX = COURT.fenceX
 const FZ = COURT.fenceZ
 const FH = COURT.fenceHeight
-const WIND_H = 1.9
+/** Windscreen height: tall enough that the court feels enclosed, like a city court. */
+const WIND_H = 2.7
 
 const dummy = new THREE.Object3D()
 
@@ -106,13 +106,26 @@ function FencePosts() {
 
 // ------------------------------------------------------------------ stands + crowd
 
-function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number; length?: number; facing: 1 | -1 }) {
+function Stand({
+  x,
+  rows = 5,
+  length = 22,
+  facing,
+  occupancy = 0.82,
+}: {
+  x: number
+  rows?: number
+  length?: number
+  facing: 1 | -1
+  /** Share of seats taken. */
+  occupancy?: number
+}) {
   const seats = useMemo(() => {
     const r = rng(Math.abs(x) * 13)
     const list: Seat[] = []
     for (let row = 0; row < rows; row++) {
       for (let s = 0; s < Math.floor(length / 0.62); s++) {
-        if (r() < 0.18) continue
+        if (r() > occupancy) continue
         list.push({
           // Sat on the back half of the bench, toward the court.
           x: x + facing * -row * 0.85 + facing * 0.08,
@@ -122,7 +135,7 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
       }
     }
     return list
-  }, [x, rows, length, facing])
+  }, [x, rows, length, facing, occupancy])
 
   const tiers = useMemo(() => {
     const steps: THREE.BufferGeometry[] = []
@@ -165,6 +178,60 @@ function Stand({ x, rows = 5, length = 22, facing }: { x: number; rows?: number;
       <Suspense fallback={null}>
         <Crowd seats={seats} seed={Math.abs(x)} />
       </Suspense>
+    </group>
+  )
+}
+
+// ------------------------------------------------------------------ string lights
+
+/**
+ * Warm bulbs strung along the top rail of both long sides, sagging between the posts.
+ * Unlit, bright material: they read as glowing at dusk and catch the bloom on High.
+ */
+function StringLights() {
+  const bulbs = useRef<THREE.InstancedMesh>(null!)
+  const { points, wire } = useMemo(() => {
+    const pts: THREE.Vector3[] = []
+    const wirePts: number[] = []
+    const span = 3
+    const sag = 0.45
+    for (const side of [-1, 1]) {
+      const x = side * FX
+      for (let z0 = -FZ; z0 < FZ - 0.01; z0 += span) {
+        const steps = 12
+        for (let i = 0; i < steps; i++) {
+          const u0 = i / steps
+          const u1 = (i + 1) / steps
+          const y = (u: number) => FH - 0.05 - sag * 4 * u * (1 - u)
+          wirePts.push(x, y(u0), z0 + u0 * span, x, y(u1), z0 + u1 * span)
+          if (i % 2 === 1) pts.push(new THREE.Vector3(x, y(u0) - 0.07, z0 + u0 * span))
+        }
+      }
+    }
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.Float32BufferAttribute(wirePts, 3))
+    return { points: pts, wire: g }
+  }, [])
+  useEffect(() => () => wire.dispose(), [wire])
+  useLayoutEffect(() => {
+    points.forEach((p, i) => {
+      dummy.position.copy(p)
+      dummy.rotation.set(0, 0, 0)
+      dummy.scale.setScalar(1)
+      dummy.updateMatrix()
+      bulbs.current.setMatrixAt(i, dummy.matrix)
+    })
+    bulbs.current.instanceMatrix.needsUpdate = true
+  }, [points])
+  return (
+    <group>
+      <lineSegments geometry={wire}>
+        <lineBasicMaterial color="#1c1f1d" />
+      </lineSegments>
+      <instancedMesh ref={bulbs} args={[undefined, undefined, points.length]}>
+        <sphereGeometry args={[0.06, 8, 6]} />
+        <meshBasicMaterial color={[2.2, 1.55, 0.8]} toneMapped={false} />
+      </instancedMesh>
     </group>
   )
 }
@@ -295,37 +362,6 @@ function LightPole({ x, z }: { x: number; z: number }) {
           <meshStandardMaterial color="#fff6e0" emissive="#fff1cc" emissiveIntensity={0.6} />
         </mesh>
       </group>
-    </group>
-  )
-}
-
-function UmpireChair() {
-  const x = -(COURT.netPostX + 1.1)
-  return (
-    <group position={[x, 0, 0]} rotation-y={Math.PI / 2}>
-      {[
-        [-0.35, -0.35],
-        [0.35, -0.35],
-        [-0.35, 0.35],
-        [0.35, 0.35],
-      ].map(([a, b], i) => (
-        <mesh key={i} position={[a, 1, b]} castShadow>
-          <cylinderGeometry args={[0.03, 0.04, 2, 8]} />
-          <meshStandardMaterial color="#e9e9e4" roughness={0.4} metalness={0.3} />
-        </mesh>
-      ))}
-      <mesh position={[0, 2.02, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.9, 0.06, 0.9]} />
-        <meshStandardMaterial color="#1f4a3a" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 2.35, -0.3]} castShadow>
-        <boxGeometry args={[0.6, 0.6, 0.06]} />
-        <meshStandardMaterial color="#1f4a3a" roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 2.3, 0.42]} castShadow>
-        <boxGeometry args={[0.9, 0.5, 0.04]} />
-        <meshStandardMaterial color="#1f4a3a" roughness={0.6} />
-      </mesh>
     </group>
   )
 }
@@ -538,10 +574,6 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       <FenceSide length={FZ * 2} position={[FX, 0, 0]} rotationY={-Math.PI / 2} />
       <FenceSide length={FZ * 2} position={[-FX, 0, 0]} rotationY={Math.PI / 2} />
       <FencePosts />
-      <UmpireChair />
-      <Suspense fallback={null}>
-        <Officials detail={detail} />
-      </Suspense>
       <Bench z={-1.6} />
       <Bench z={1.6} />
       {[
@@ -552,8 +584,15 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       ].map(([x, z]) => (
         <LightPole key={`${x}${z}`} x={x} z={z} />
       ))}
-      <Stand x={FX + 1.6} facing={-1} rows={detail === 'low' ? 3 : 7} length={32} />
-      {detail !== 'low' && <Stand x={-FX - 1.6} facing={1} rows={5} length={26} />}
+      {/* A neighbourhood court, not a stadium: one small bleacher by the net, a few friends. */}
+      <Stand
+        x={COURT.doublesHalfWidth + 3.6}
+        facing={-1}
+        rows={3}
+        length={9}
+        occupancy={detail === 'low' ? 0.3 : 0.45}
+      />
+      <StringLights />
       <Palms />
       <Hedges />
       <Clubhouse />
