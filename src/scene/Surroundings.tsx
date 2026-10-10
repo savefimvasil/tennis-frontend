@@ -15,7 +15,8 @@ import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { metreUvs } from './photoTextures'
 import { Crowd, type Seat } from './Crowd'
 import { Officials } from './Officials'
-import { Backdrop } from './Backdrop'
+import { Backdrop, CloudDome } from './Backdrop'
+import { FarField } from './FarField'
 
 const FX = COURT.fenceX
 const FZ = COURT.fenceZ
@@ -556,8 +557,12 @@ export function Surroundings({ detail }: { detail: 'high' | 'medium' | 'low' }) 
       <Palms />
       <Hedges />
       <Clubhouse />
-      <Backdrop detail={detail} />
-      <Hills />
+      {detail !== 'low' && <CloudDome />}
+      {/* Static scenery beyond ~100 m: baked into a panorama instead of drawn every frame. */}
+      <FarField quality={detail}>
+        <Backdrop detail={detail} />
+        <Hills />
+      </FarField>
     </group>
   )
 }

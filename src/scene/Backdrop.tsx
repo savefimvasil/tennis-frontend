@@ -326,7 +326,8 @@ const cloudFragment = /* glsl */ `
   }
 `
 
-function CloudDome() {
+/** Drifting clouds: drawn live (behind the baked far field), not baked, so they move. */
+export function CloudDome() {
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -344,7 +345,7 @@ function CloudDome() {
     mat.uniforms.uTime.value = s.clock.elapsedTime
   })
   return (
-    <mesh material={mat} renderOrder={-1} frustumCulled={false}>
+    <mesh material={mat} renderOrder={-3} frustumCulled={false}>
       <sphereGeometry args={[950, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
     </mesh>
   )
@@ -357,7 +358,6 @@ export function Backdrop({ detail }: { detail: 'high' | 'medium' | 'low' }) {
       <Town />
       <Vegetation count={detail === 'high' ? 2000 : detail === 'medium' ? 1200 : 450} />
       <Sea />
-      {detail !== 'low' && <CloudDome />}
     </group>
   )
 }

@@ -97,6 +97,12 @@ CPU. The cost is the GPU: the render passes and the vertices and pixels they pus
 - **Frame-rate setting** (menu, saved): 60 fps, or 30 fps for quiet fans and battery.
   Physics still steps at 120 Hz either way.
 - **Menus** render the backdrop at 20 fps instead of 30.
+- **Far field baked like a skybox** (`FarField.tsx`): everything beyond ~100 m (hills, groves,
+  town, ridges, the bay, the outer lawn) is rendered into a panorama around the camera (8
+  sectors of 45 degrees, linear HDR, fog and lighting included) and drawn every frame as one
+  textured sphere. It is re-baked one sector per frame only when the camera has moved more
+  than 6 m (parallax), plus a slow background refresh for late-loading textures. The near
+  lawn is clipped to an octagon so it never covers the baked hills. Clouds stay live.
 - Rewriting game code in Rust/WebAssembly would not help: it is not where the time goes.
 
 ## Next steps, by value

@@ -217,7 +217,7 @@ export function Court() {
     <group>
       {/* Grass beyond the fence */}
       {/* Ends 120 m east of the court, where the beach and the bay begin (Backdrop). */}
-      <mesh rotation-x={-Math.PI / 2} position={[COAST_X - LAWN / 2, -0.02, 0]} receiveShadow>
+      <mesh name="lawn" rotation-x={-Math.PI / 2} position={[COAST_X - LAWN / 2, -0.02, 0]} receiveShadow>
         <planeGeometry args={[LAWN, LAWN]} />
         <WithFallback fallback={<meshStandardMaterial map={grass} roughness={1} color="#a8b893" />}>
           <LawnMaterial />
