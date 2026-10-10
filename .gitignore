@@ -5,3 +5,5 @@ dist
 tools/rocketbox/input/
 *.tsbuildinfo
 tools/textures/.cache/
+tools/mixamo/input/
+.idea/
