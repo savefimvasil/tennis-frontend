@@ -186,7 +186,7 @@ export function Scene() {
       )}
       <Fx />
       <CameraRig />
-      <Effects quality={quality} />
+      <Effects quality={quality} surface={surface} />
       {LabScene ? (
         <Suspense fallback={null}>
           <LabScene />

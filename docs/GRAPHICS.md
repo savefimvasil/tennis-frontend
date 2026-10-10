@@ -20,6 +20,8 @@ glulam with laminations, glue lines and growth rings; oak or painted planks; the
 membrane. Each comes with colour, normal and roughness maps, generated once at load.
 Ambient occlusion now runs on Medium as well as High.
 
+**Colour grade.** Each venue has its own 3D lookup table (`grade.ts`), built in code: saturation back after AgX, a gentle S-curve and split toning (cool shadows and warm lamp highlights in the evening hall, lush greens in the garden, hot terracotta in the courtyard). It replaces the flat saturation boost; one texture lookup per pixel on every quality.
+
 **Trees.** Real trees from EZ-Tree (MIT), baked by `tools/trees` into one GLB of six
 variants: branches with photo bark and photo leaf cards whose normals bend out from the
 crown centre, so each crown shades as one volume. The hall sees them through its open
