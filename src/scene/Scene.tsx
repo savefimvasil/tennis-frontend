@@ -97,8 +97,9 @@ const PRESETS = {
 } as const
 
 /**
- * Caps the frame rate: 60 fps in play (120 Hz screens would otherwise render twice as much),
- * 30 fps behind menus. Rendering runs on demand and this loop requests frames.
+ * Caps the frame rate: the player's choice in play (60, or 30 for quiet fans; 120 Hz screens
+ * would otherwise render twice as much), 20 fps behind menus. Rendering runs on demand and
+ * this loop requests frames.
  */
 function FrameLimiter({ fps }: { fps: number }) {
   const invalidate = useThree((s) => s.invalidate)
@@ -135,6 +136,7 @@ export function Scene() {
   const mode = useGame((s) => s.mode)
   // An online match keeps running behind the pause menu: the opponent does not stop.
   const running = screen === 'playing' || (mode === 'online' && screen === 'paused')
+  const fpsCap = useGame((s) => Number(s.fps))
   const slow = running && timeScale < 1
 
   return (
@@ -152,7 +154,8 @@ export function Scene() {
         if (import.meta.env.DEV) Object.assign(window, { __r3f: state })
       }}
     >
-      <FrameLimiter fps={running ? 60 : 30} />
+      {/* Menus only show a slow orbit behind the panels: 20 fps is plenty and keeps the GPU cool. */}
+      <FrameLimiter fps={running ? fpsCap : 20} />
       <Lighting key={shadowSize} shadowSize={shadowSize} />
       <Suspense fallback={null}>
         <Physics

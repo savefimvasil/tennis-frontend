@@ -64,6 +64,11 @@ const FORMATS: Option<FormatId>[] = [
   { id: 'match', label: 'Match', note: 'Best of 3 sets' },
 ]
 
+const FPS_OPTIONS: Option<'60' | '30'>[] = [
+  { id: '60', label: '60 fps', note: 'Smoothest' },
+  { id: '30', label: '30 fps', note: 'Quiet fans, battery' },
+]
+
 const QUALITIES: Option<'high' | 'medium' | 'low'>[] = [
   { id: 'high', label: 'High', note: 'AO, bloom, full crowd' },
   { id: 'medium', label: 'Medium', note: 'Lighter effects' },
@@ -135,12 +140,14 @@ export function MainMenu() {
     difficulty,
     format,
     quality,
+    fps,
     pace,
     surface,
     skin,
     setDifficulty,
     setFormat,
     setQuality,
+    setFps,
     setPace,
     setSurface,
     setSkin,
@@ -236,6 +243,13 @@ export function MainMenu() {
               options={QUALITIES}
               value={quality}
               onChange={setQuality}
+            />
+            <Choice
+              name="Frame rate"
+              icon={<Monitor weight="bold" />}
+              options={FPS_OPTIONS}
+              value={fps}
+              onChange={setFps}
             />
           </motion.div>
         </motion.div>

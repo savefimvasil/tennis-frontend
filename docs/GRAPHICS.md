@@ -86,6 +86,19 @@ the four ball kids and their shadows.
 - **Town**: walls in whitewash, sand, ochre and faded terracotta.
 - **Grade**: a little saturation after the AgX tone mapping, which washes colours out.
 
+## Performance pass
+
+Measured in a rally (dev build, per frame): all the game logic (physics at 120 Hz, the
+director, the AI and both athletes' animation with IK) takes well under a millisecond of
+CPU. The cost is the GPU: the render passes and the vertices and pixels they push. So:
+
+- **Trees** were most of the scene's vertices (648k of 796k). They are now indexed and
+  ~25-30 vertices each, with a few hundred fewer: 160k, the whole scene 358k.
+- **Frame-rate setting** (menu, saved): 60 fps, or 30 fps for quiet fans and battery.
+  Physics still steps at 120 Hz either way.
+- **Menus** render the backdrop at 20 fps instead of 30.
+- Rewriting game code in Rust/WebAssembly would not help: it is not where the time goes.
+
 ## Next steps, by value
 
 1. **Clubhouse depth.** Recessed windows and arches, a balcony rail, shutters and a terrace

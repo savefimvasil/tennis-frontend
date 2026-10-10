@@ -355,7 +355,7 @@ export function Backdrop({ detail }: { detail: 'high' | 'medium' | 'low' }) {
     <group>
       <Hillside />
       <Town />
-      <Vegetation count={detail === 'high' ? 2400 : detail === 'medium' ? 1400 : 500} />
+      <Vegetation count={detail === 'high' ? 2000 : detail === 'medium' ? 1200 : 450} />
       <Sea />
       {detail !== 'low' && <CloudDome />}
     </group>

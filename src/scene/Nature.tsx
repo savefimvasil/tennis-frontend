@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { rng } from './textures'
 import { COAST_X } from './Court'
 import { hillHeight, woodland } from './terrain'
@@ -19,53 +19,65 @@ function paint(g: THREE.BufferGeometry, hex: string) {
   return g
 }
 
-/** Unit-height shapes (y up from the ground); instances scale them. */
+/** Shared-vertex copy without uv/normal, so thousands of instances stay cheap to transform. */
+function indexed(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const out = g.clone()
+  g.dispose()
+  out.deleteAttribute('uv')
+  out.deleteAttribute('normal')
+  const merged = mergeVertices(out)
+  out.dispose()
+  return merged
+}
+
+/**
+ * Unit-height shapes (y up from the ground); instances scale them. Kept very low-poly
+ * (25-30 vertices) and indexed: a couple of thousand of them are seen at once, mostly a few
+ * pixels tall, and they used to be most of the vertices in the whole scene.
+ */
 function treeGeometries() {
-  // Cypress: a tall flame-shaped column.
-  const cypressCrown = new THREE.ConeGeometry(0.16, 0.9, 7, 3)
+  // Cypress: a tall flame-shaped column (its trunk is hidden in the skirt anyway).
+  const cypress = indexed(new THREE.ConeGeometry(0.16, 1, 6, 2))
   {
-    // Bulge the lower third so it reads as a flame, not a cone.
-    const p = cypressCrown.attributes.position as THREE.BufferAttribute
+    const p = cypress.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < p.count; i++) {
-      const y = p.getY(i) + 0.45
-      const k = 1 + Math.sin(Math.min(1, y / 0.9) * Math.PI) * 0.35
-      p.setXYZ(i, p.getX(i) * k, p.getY(i), p.getZ(i) * k)
+      const y = p.getY(i) + 0.5
+      // Bulge the lower third so it reads as a flame, not a cone.
+      const k = 1 + Math.sin(Math.min(1, y) * Math.PI) * 0.35
+      p.setXYZ(i, p.getX(i) * k, p.getY(i) + 0.5, p.getZ(i) * k)
     }
-    cypressCrown.translate(0, 0.55, 0)
+    paint(cypress, '#ffffff')
   }
-  const cypressTrunk = new THREE.CylinderGeometry(0.02, 0.025, 0.12, 5).translate(0, 0.06, 0)
-  const cypress = mergeGeometries([
-    paint(cypressCrown.toNonIndexed(), '#ffffff'),
-    paint(cypressTrunk.toNonIndexed(), '#5a4632'),
-  ])!
 
   // Umbrella (stone) pine: a bare trunk and a wide flat crown.
-  const pineCrown = new THREE.IcosahedronGeometry(0.5, 1)
-  pineCrown.scale(1, 0.32, 1).translate(0, 0.86, 0)
-  const pineTrunk = new THREE.CylinderGeometry(0.035, 0.05, 0.8, 6).translate(0, 0.4, 0)
-  const pine = mergeGeometries([
-    paint(pineCrown.toNonIndexed(), '#ffffff'),
-    paint(pineTrunk.toNonIndexed(), '#6a4c34'),
-  ])!
+  const pineCrown = paint(
+    indexed(new THREE.IcosahedronGeometry(0.5, 0)).scale(1, 0.32, 1).translate(0, 0.86, 0),
+    '#ffffff',
+  )
+  const pineTrunk = paint(
+    indexed(new THREE.CylinderGeometry(0.035, 0.05, 0.8, 4, 1, true)).translate(0, 0.4, 0),
+    '#6a4c34',
+  )
+  const pine = mergeGeometries([pineCrown, pineTrunk])!
 
-  // Olive: a short trunk and a lumpy, silvery round crown.
-  const oliveCrown = new THREE.IcosahedronGeometry(0.42, 1)
+  // Olive: a short trunk and a lumpy round crown.
+  const oliveCrown = indexed(new THREE.IcosahedronGeometry(0.42, 0))
   {
     const p = oliveCrown.attributes.position as THREE.BufferAttribute
     const r = rng(31)
     for (let i = 0; i < p.count; i++) {
       const k = 0.85 + r() * 0.3
-      p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k)
+      p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8 + 0.62, p.getZ(i) * k)
     }
-    oliveCrown.translate(0, 0.62, 0)
+    paint(oliveCrown, '#ffffff')
   }
-  const oliveTrunk = new THREE.CylinderGeometry(0.04, 0.06, 0.35, 6).translate(0, 0.17, 0)
-  const olive = mergeGeometries([
-    paint(oliveCrown.toNonIndexed(), '#ffffff'),
-    paint(oliveTrunk.toNonIndexed(), '#5b4a3a'),
-  ])!
+  const oliveTrunk = paint(
+    indexed(new THREE.CylinderGeometry(0.04, 0.06, 0.35, 4, 1, true)).translate(0, 0.17, 0),
+    '#5b4a3a',
+  )
+  const olive = mergeGeometries([oliveCrown, oliveTrunk])!
   for (const g of [cypress, pine, olive]) g.computeVertexNormals()
-  for (const g of [cypressCrown, cypressTrunk, pineCrown, pineTrunk, oliveCrown, oliveTrunk]) g.dispose()
+  for (const g of [pineCrown, pineTrunk, oliveCrown, oliveTrunk]) g.dispose()
   return { cypress, pine, olive }
 }
 
