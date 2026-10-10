@@ -50,6 +50,7 @@ function FenceSide({
           color="#26332d"
           alphaMap={chain}
           alphaTest={0.5}
+          alphaToCoverage
           side={THREE.DoubleSide}
           metalness={0.4}
           roughness={0.6}

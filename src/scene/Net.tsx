@@ -56,6 +56,7 @@ export function Net() {
           color="#1b1f23"
           alphaMap={alpha}
           alphaTest={0.35}
+          alphaToCoverage
           transparent={false}
           side={THREE.DoubleSide}
           roughness={0.9}

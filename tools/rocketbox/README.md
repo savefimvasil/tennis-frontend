@@ -15,6 +15,12 @@ copy in `public/models/rocketbox/LICENSE.md`). The game currently ships `Sports_
 
    This writes `public/models/rocketbox/<Name>.glb` (metres, feet on the ground, plain materials) and prints
    the skeleton for checking.
-4. Add an entry to `ROCKETBOX` in `src/scene/athlete/Rocketbox.tsx`.
+4. Compact it (one welded vertex set per primitive, no vertex colours):
+
+   ```bash
+   node tools/rocketbox/optimize.mjs public/models/rocketbox/<Name>.glb
+   ```
+
+5. Add an entry to `ROCKETBOX` in `src/scene/athlete/Rocketbox.tsx`.
 
 All Rocketbox adults share the same 3ds Max Biped skeleton, so the bone mapping in `Rocketbox.tsx` works for any of them.

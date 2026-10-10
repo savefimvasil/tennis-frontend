@@ -62,7 +62,7 @@ function material(name: string, tex: Tex) {
   } else {
     const map = tex[`leaves-${type}` as keyof Tex]
     map.colorSpace = THREE.SRGBColorSpace
-    m = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.85 })
+    m = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.85 })
   }
   materials.set(name, m)
   return m

@@ -303,7 +303,7 @@ function Bougainvillea({ count }: { count: number }) {
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, spots.length]}>
       <planeGeometry args={[1, 1]} />
-      <meshStandardMaterial map={map} alphaTest={0.5} side={THREE.DoubleSide} roughness={0.8} />
+      <meshStandardMaterial map={map} alphaTest={0.5} alphaToCoverage side={THREE.DoubleSide} roughness={0.8} />
     </instancedMesh>
   )
 }

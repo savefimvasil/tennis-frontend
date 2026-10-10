@@ -3,6 +3,7 @@ import { suspend } from 'suspend-react'
 import { Environment, Lightformer, Sky, useEnvironment, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { FallbackOnError } from './PbrMaterial'
+import { COURT } from '../game/constants'
 
 // Late-afternoon light: a low warm sun from behind the camera's right, a cool sky fill, and
 // a real sky as background and environment: Poly Haven "Lonely Road Afternoon (Pure Sky)",
@@ -29,24 +30,43 @@ export function Lighting({ shadowSize, indoor = false }: { shadowSize: number; i
   return indoor ? <EveningHall shadowSize={shadowSize} /> : <Daylight shadowSize={shadowSize} />
 }
 
-function useShadowFrustum() {
+/**
+ * Fits the shadow camera to the play area inside the fence (up to head height) as the light
+ * sees it, instead of a generous fixed box: the same map covers about a third of the area,
+ * so player shadows come out much sharper.
+ */
+function useShadowFrustum(dir: THREE.Vector3) {
   const light = useRef<THREE.DirectionalLight>(null!)
   useLayoutEffect(() => {
-    const cam = light.current.shadow.camera
-    cam.left = -24
-    cam.right = 24
-    cam.top = 27
-    cam.bottom = -27
-    cam.near = 20
-    cam.far = 140
+    const l = light.current
+    const cam = l.shadow.camera
+    l.updateMatrixWorld()
+    l.target.updateMatrixWorld()
+    cam.position.copy(dir).multiplyScalar(70)
+    cam.lookAt(0, 0, 0)
+    cam.updateMatrixWorld()
+    const toLight = cam.matrixWorldInverse
+    const box = new THREE.Box3()
+    const p = new THREE.Vector3()
+    const x = COURT.fenceX + 0.5
+    const z = COURT.fenceZ + 0.5
+    for (const cx of [-x, x])
+      for (const cy of [0, 2.6]) for (const cz of [-z, z]) box.expandByPoint(p.set(cx, cy, cz).applyMatrix4(toLight))
+    cam.left = box.min.x
+    cam.right = box.max.x
+    cam.bottom = box.min.y
+    cam.top = box.max.y
+    // Anything between the light and the court may cast into it (walls, the vault): near stays close.
+    cam.near = 1
+    cam.far = -box.min.z + 5
     cam.updateProjectionMatrix()
-  }, [])
+  }, [dir])
   return light
 }
 
 /** Dusk outside, floodlights inside: soft even light, faint short shadows, a blue-hour sky. */
 function EveningHall({ shadowSize }: { shadowSize: number }) {
-  const lamps = useShadowFrustum()
+  const lamps = useShadowFrustum(LAMPS_DIR)
   return (
     <>
       <color attach="background" args={['#101a33']} />
@@ -125,7 +145,7 @@ function DuskSky() {
 }
 
 function Daylight({ shadowSize }: { shadowSize: number }) {
-  const sun = useShadowFrustum()
+  const sun = useShadowFrustum(SUN_DIR)
   const sunPos = SUN_DIR.clone().multiplyScalar(70)
   return (
     <>

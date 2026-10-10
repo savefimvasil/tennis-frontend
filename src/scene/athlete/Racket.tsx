@@ -12,6 +12,7 @@ export function Racket({ frame }: { frame: string }) {
         color: '#f1f1e6',
         alphaMap: stringsTexture(),
         alphaTest: 0.4,
+        alphaToCoverage: true,
         side: THREE.DoubleSide,
         roughness: 0.6,
       }),

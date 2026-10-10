@@ -116,6 +116,8 @@ export interface PosedAvatar {
   pose(p: StillPose): void
   /** Swaps the shirt colour (null: the avatar's own). Returns the material in use. */
   shirt(hex: string | null): void
+  /** The three materials, to tell the parts apart. */
+  materials: { body: THREE.MeshStandardMaterial; head: THREE.MeshStandardMaterial; hair: THREE.MeshStandardMaterial }
   dispose(): void
 }
 
@@ -132,6 +134,18 @@ export function useAvatarAssets(skin: Skin) {
     ...(skin.opacity ? { opacity: AVATAR_BASE + skin.opacity } : {}),
   }) as AvatarTextures
   return { gltf, tex }
+}
+
+/**
+ * Recoloured shirts, shared by every avatar with the same texture and colour: repainting a
+ * 1024 px texture costs tens of milliseconds and megabytes of video memory each time.
+ */
+const shirtCache = new Map<string, THREE.Texture>()
+function shirtTexture(src: THREE.Texture, hex: string) {
+  const key = `${src.uuid}|${hex}`
+  let t = shirtCache.get(key)
+  if (!t) shirtCache.set(key, (t = recolourShirt(src, hex)))
+  return t
 }
 
 export function buildPosed(
@@ -162,7 +176,6 @@ export function buildPosed(
   scene.updateMatrixWorld(true)
   // Which side of the body is +x.
   const leftX = Math.sign(scene.getObjectByName('Bip01_L_UpperArm')!.getWorldPosition(v1).x) || 1
-  const shirts = new Map<string, THREE.Texture>()
 
   const applyLimbs = (side: 'L' | 'R', limb: Limb, mirror: number) => {
     const m = (d: THREE.Vector3Like) => ({ x: d.x * mirror, y: d.y, z: d.z })
@@ -174,6 +187,7 @@ export function buildPosed(
 
   return {
     scene,
+    materials: { body, head, hair },
     pose(p) {
       for (const [o, r] of rest) {
         o.quaternion.copy(r.q)
@@ -190,19 +204,13 @@ export function buildPosed(
       if (!hex) {
         body.map = tex.body
       } else {
-        let t = shirts.get(hex)
-        if (!t) {
-          t = recolourShirt(tex.body, hex)
-          shirts.set(hex, t)
-        }
-        body.map = t
+        body.map = shirtTexture(tex.body, hex)
       }
       body.needsUpdate = true
     },
     dispose() {
       for (const g of geometries) g.dispose()
       for (const m of [body, head, hair]) m.dispose()
-      for (const t of shirts.values()) t.dispose()
     },
   }
 }
