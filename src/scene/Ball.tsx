@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { Trail } from '@react-three/drei'
 import * as THREE from 'three'
 import { BALL } from '../game/constants'
@@ -10,6 +10,10 @@ import { ballTexture } from './textures'
 export function Ball() {
   const body = useMemo(() => new BallBody(), [])
   const root = useRef<THREE.Group>(null!)
+  // On a small screen a real-size ball is a couple of pixels: draw it larger (up to ~1.8x on a
+  // phone in landscape) and brighter. Only the picture; the physics keeps the real ball.
+  const height = useThree((st) => st.size.height)
+  const visual = Math.max(1, Math.min(1.9, 700 / Math.max(1, height)))
   const tex = useMemo(() => ballTexture(), [])
   const squashGroup = useRef<THREE.Group>(null!)
   const spinMesh = useRef<THREE.Mesh>(null!)
@@ -29,6 +33,7 @@ export function Ball() {
   useFrame((_, dt) => {
     const b = body
     root.current.position.set(b.p.x, b.p.y, b.p.z)
+    root.current.scale.setScalar(visual)
     root.current.quaternion.set(b.q.x, b.q.y, b.q.z, b.q.w)
     const f = fx.current
     for (const e of sim.events) {
@@ -75,7 +80,7 @@ export function Ball() {
   }, [body])
   return (
     <group ref={root}>
-      <Trail width={0.24} length={4} decay={1.2} color="#f6ffbf" attenuation={(t) => t * t * t}>
+      <Trail width={0.24 * visual} length={4} decay={1.2} color="#f6ffbf" attenuation={(t) => t * t * t}>
         <group ref={squashGroup}>
           <mesh ref={spinMesh} castShadow>
             <sphereGeometry args={[BALL.radius, 32, 20]} />
@@ -83,7 +88,7 @@ export function Ball() {
               map={tex}
               roughness={0.92}
               emissive={new THREE.Color('#c9ef2a')}
-              emissiveIntensity={0.18}
+              emissiveIntensity={visual > 1.3 ? 0.5 : 0.18}
             />
           </mesh>
         </group>

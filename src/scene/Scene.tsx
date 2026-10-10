@@ -81,8 +81,9 @@ function GameLoop({ running, timeScale }: { running: boolean; timeScale: number 
       acc.current = 0
       return
     }
-    // A long frame (tab in the background) is not caught up: at most a tenth of a second.
-    acc.current += Math.min(dt, 0.1) * timeScale
+    // A long frame (tab in the background) is not caught up beyond that.
+    // A slow device (a few fps) still plays at full speed, up to a quarter second per frame.
+    acc.current += Math.min(dt, 0.25) * timeScale
     while (acc.current >= PHYSICS.timeStep) {
       stepGame(PHYSICS.timeStep)
       acc.current -= PHYSICS.timeStep
@@ -163,7 +164,7 @@ export function Scene() {
       key={quality === 'low' ? 'direct' : 'composer'}
       gl={{
         antialias: quality === 'low',
-        powerPreference: quality === 'low' ? 'low-power' : 'default',
+        powerPreference: 'default',
         stencil: false,
       }}
       camera={{ fov: 50, near: 0.1, far: 200, position: [0, 6, 16] }}

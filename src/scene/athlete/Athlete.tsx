@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber'
 import { RoundedBox } from '@react-three/drei'
 import * as THREE from 'three'
 import { sim } from '../../game/sim'
+import { useGame } from '../../game/store'
 import type { Side } from '../../game/constants'
 import {
   BACKHAND,
@@ -366,6 +367,7 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
     feet: [0, 1].map(() => ({ locked: false, at: new THREE.Vector3(), w: 0, floor: 0.2, len: 0 })),
   })
 
+  const lowDetail = useGame((st) => st.quality === 'low')
   useFrame((clock, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05)
     const a = sim.athletes[side]
@@ -662,16 +664,18 @@ export function Athlete({ side, kit, skin }: { side: Side; kit: Kit; skin?: Skin
       const joints = (jointMap.current ??= { ...jointObjects(refs), pelvis: pelvis.current })
       const b = body.current
       b.drive(joints, pose.lift)
-      plantFeet(
-        b,
-        joints,
-        pose.lift,
-        s.feet,
-        [refs.lHip, refs.lKnee, refs.lAnk],
-        [refs.rHip, refs.rKnee, refs.rAnk],
-        airborne,
-        dt,
-      )
+      // Foot planting re-poses the skeleton a few times a frame: not on Low (phones).
+      if (!lowDetail)
+        plantFeet(
+          b,
+          joints,
+          pose.lift,
+          s.feet,
+          [refs.lHip, refs.lKnee, refs.lAnk],
+          [refs.rHip, refs.rKnee, refs.rAnk],
+          airborne,
+          dt,
+        )
       // Racket-arm IK: around contact, turn the shoulder so the string bed points at the
       // planned contact point, then pose the skeleton again with the correction.
       const w = a.aim ? aimWeight(a.swing, a.swingT) : 0

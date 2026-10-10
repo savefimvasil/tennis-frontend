@@ -352,8 +352,13 @@ export function Hall({ detail }: { detail: 'high' | 'medium' | 'low' }) {
           <PbrMaterial set="court/grass" repeat={[(WX + 24) / 1.1, (WZ + 24) / 1.1]} color="#2c3d2e" roughness={1} />
         </WithFallback>
       </mesh>
-      <Trees kind="round" spots={trees} seed={5} dim={0.32} />
-      <Trees kind="conifer" spots={conifers} seed={6} dim={0.3} />
+      {/* Seen only through the window band: phones (Low) skip them. */}
+      {detail === 'low' ? null : (
+        <>
+          <Trees kind="round" spots={trees} seed={5} dim={0.32} />
+          <Trees kind="conifer" spots={conifers} seed={6} dim={0.3} />
+        </>
+      )}
       <EndWall z={-WZ} />
       <EndWall z={WZ} />
       <PlayerBenches />
