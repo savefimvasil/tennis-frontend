@@ -83,10 +83,17 @@ export function serveTarget(server: Side, deuce: boolean, aimX: number, safe: bo
   return { x, z: receiverSign * depth }
 }
 
-/** Groundstroke aim for a player defending +z: the stick steers across, up/down sets depth. */
+/**
+ * Groundstroke aim for a player defending +z, from the stick at contact. Sideways sets the
+ * angle, forward/back the depth: full forward lands near the baseline, full back short, about
+ * the service line. A shorter ball can take a sharper angle (the court is as wide but closer).
+ */
 export function rallyTarget(shot: ShotType, moveX: number, moveY: number) {
-  const tx = Math.max(-3.7, Math.min(3.7, moveX * 3.1))
-  const depth = Math.max(4.8, Math.min(11.1, SHOTS[shot].depth + moveY * 1.7))
+  const base = SHOTS[shot].depth
+  const y = Math.max(-1, Math.min(1, moveY))
+  const depth = Math.max(4.8, Math.min(11.3, y >= 0 ? base + y * (11.2 - base) : base + y * (base - 5.2)))
+  const width = 3.1 + (11 - depth) * 0.12
+  const tx = Math.max(-3.8, Math.min(3.8, Math.max(-1, Math.min(1, moveX)) * width))
   return { x: tx, z: -depth }
 }
 
@@ -125,7 +132,15 @@ export interface ShotInput {
   swingMul: number
   /** Forced error (AI only). */
   miss: Miss
+  /**
+   * Groundstrokes: how long the shot key was held into the stroke, 0..1 (0.5 when unknown).
+   * Holding through contact hits harder and less safely; a quick tap is a softer, steadier ball.
+   */
+  power?: number
 }
+
+/** How long a held shot key takes to reach full power (s). */
+export const POWER_HOLD = 0.45
 
 export interface ShotResult extends ShotSolution {
   speed: number
@@ -141,7 +156,10 @@ export function resolveShot(inp: ShotInput, rng: Rng): ShotResult {
   const height = from.y < 0.45 ? (0.45 - from.y) * 2.5 : from.y > 1.8 ? (from.y - 1.8) * 1.2 : 0
   const reach = Math.max(0, Math.abs(inp.lateral) - 0.9) * 1.2
   const difficulty = serve ? 1 : 1 + Math.max(0, pace - 24) / 22 + height + reach
-  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty
+  const power = serve ? 0.5 : Math.max(0, Math.min(1, inp.power ?? 0.5))
+  // Power trades accuracy for pace: +-12% speed, +-35% scatter around a normal swing.
+  const powerPace = 1 + (power - 0.5) * 0.24
+  const errScale = (serve ? 0.5 : 1) * (eff.error + running) * difficulty * (1 + (power - 0.5) * 0.7)
   // Depth scatters more than direction for real groundstrokes.
   let tx = target.x + gauss(rng) * errScale * 0.75
   let tz = target.z + gauss(rng) * errScale
@@ -162,7 +180,7 @@ export function resolveShot(inp: ShotInput, rng: Rng): ShotResult {
   const sol = solveShot({
     from,
     target: { x: tx, z: tz },
-    speed: spec.speed * eff.pace * lowBall * highBall * inp.swingMul + rebound,
+    speed: spec.speed * eff.pace * lowBall * highBall * inp.swingMul * (shot === 'lob' ? 1 : powerPace) + rebound,
     // Spin scales with racket-head speed like the pace does.
     spin: spec.spin * (grade === 'perfect' ? 1.1 : 1) * (serve ? 1 : inp.swingMul) * highBall,
     sidespin: serve ? SERVES[shot].sidespin : 0,

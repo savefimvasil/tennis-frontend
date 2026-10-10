@@ -20,7 +20,7 @@ export interface Athlete {
   /** Serve: ball tossed and awaiting the hit. */
   tossing: boolean
   /** Queued shot from the input (human) or plan (AI). */
-  queued: { shot: ShotType; grade: Grade | null; pressedAt: number } | null
+  queued: { shot: ShotType; grade: Grade | null; pressedAt: number; releasedAt?: number } | null
   /** Movement target for the AI. */
   target: { x: number; z: number } | null
   celebrate: number

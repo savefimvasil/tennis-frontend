@@ -5,7 +5,7 @@ import { AI, HUMAN, halfSign, other } from '../game/constants'
 import { serverXSign } from '../game/shot'
 import { inServiceBox, inSinglesCourt } from '../physics/flight'
 import { sim } from '../game/sim'
-import { useGame } from '../game/store'
+import { hudLive, useGame } from '../game/store'
 import { playApplause, playBounce, playFence, playGroan, playHit, playNet } from '../audio/sound'
 import { radialTexture } from './textures'
 
@@ -45,6 +45,24 @@ function BallBlob() {
     <mesh ref={ref} rotation-x={-Math.PI / 2} renderOrder={2}>
       <planeGeometry args={[1, 1]} />
       <meshBasicMaterial ref={mat} map={radialTexture()} color="#000000" transparent depthWrite={false} />
+    </mesh>
+  )
+}
+
+/** Where the shot you have called will go, steered by the stick until contact. */
+function AimMarker() {
+  const ref = useRef<THREE.Mesh>(null!)
+  useFrame((state) => {
+    const t = sim.phase === 'rally' ? hudLive.aimTarget : null
+    ref.current.visible = !!t
+    if (!t) return
+    ref.current.position.set(t.x, 0.01, t.z)
+    ref.current.scale.setScalar(1 + Math.sin(state.clock.elapsedTime * 8) * 0.06)
+  })
+  return (
+    <mesh ref={ref} rotation-x={-Math.PI / 2} renderOrder={3} visible={false}>
+      <ringGeometry args={[0.34, 0.42, 40]} />
+      <meshBasicMaterial color="#9be7ff" transparent opacity={0.8} toneMapped={false} depthWrite={false} />
     </mesh>
   )
 }
@@ -264,6 +282,7 @@ export function Fx() {
       <BallMarks />
       <BallBlob />
       <LandingMarker />
+      <AimMarker />
       <EventFx />
     </>
   )

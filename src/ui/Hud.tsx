@@ -252,6 +252,8 @@ function TimingGrade() {
             transition={{ duration: 0.95, times: [0, 0.15, 0.7, 1] }}
           >
             {GRADE_LABEL[timing.grade]}
+            {timing.power !== undefined && timing.power > 0.8 ? <small> · Power</small> : null}
+            {timing.power !== undefined && timing.power < 0.3 ? <small> · Touch</small> : null}
           </motion.div>
         ) : null}
       </AnimatePresence>

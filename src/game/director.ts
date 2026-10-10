@@ -27,6 +27,7 @@ import {
   shotRng,
   type Miss,
   type Rng,
+  POWER_HOLD,
   rallyShot,
 } from './shot'
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
@@ -218,6 +219,7 @@ function strike(
   lateral = 0,
   aim = { x: 0, y: 0 },
   pressT?: number,
+  power?: number,
 ) {
   const ball = sim.ball
   if (!ball) return
@@ -240,6 +242,7 @@ function strike(
       hand: a.swing === 'backhand' ? -1 : 1,
       swingMul: PACE[st.pace] * (side === AI ? AI_LEVELS[st.difficulty].pace : 1),
       miss,
+      power,
     },
     shotRandom(side),
   )
@@ -255,6 +258,7 @@ function strike(
       vin: wire({ x: vin.x, y: vin.y, z: vin.z }),
       aim,
       pressT,
+      power,
       lateral,
       rightX: r.x,
       hand: a.swing === 'backhand' ? -1 : 1,
@@ -620,6 +624,13 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
   moveAthlete(a, wantX, wantZ, speedCap, dt)
   clampArea(a, HUMAN)
 
+  // Letting go of the key stops the power building up.
+  if (a.queued && a.queued.releasedAt === undefined && input.released.includes(a.queued.shot))
+    a.queued.releasedAt = sim.time
+  hudLive.aimTarget =
+    a.queued && canHit
+      ? rallyTarget(rallyShot(a.queued.shot, Math.abs(sim.athletes[AI].z)), input.moveX, input.moveY)
+      : null
   if (!a.queued || !canHit) return
   const win = inContactWindow(a, p, h.reach)
   // Start the swing so its contact key coincides with the ball reaching the hitting plane.
@@ -637,7 +648,9 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
     }
     const shot = rallyShot(a.queued.shot, Math.abs(sim.athletes[AI].z))
     startSwing(a, win.lateral, shot, p.y)
-    useGame.getState().showTiming(grade)
+    const held = (a.queued.releasedAt ?? sim.time) - a.queued.pressedAt
+    const power = Math.max(0, Math.min(1, held / POWER_HOLD))
+    useGame.getState().showTiming(grade, power)
     lastHumanGrade = grade
     snapBallToRacket(a)
     const aim = { x: Math.max(-1, Math.min(1, input.moveX)), y: Math.max(-1, Math.min(1, input.moveY)) }
@@ -651,6 +664,7 @@ function updateHuman(dt: number, input: InputState, p: V3, v: V3) {
       online ? Math.max(-ONLINE_HELP.reach, Math.min(ONLINE_HELP.reach, win.lateral)) : win.lateral,
       aim,
       pressT,
+      power,
     )
   } else if (win.passed) {
     startSwing(a, win.lateral, a.queued.shot)

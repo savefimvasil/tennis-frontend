@@ -67,7 +67,7 @@ interface GameStore {
   match: MatchState
   serveNumber: 1 | 2
   toast: Toast | null
-  timing: { id: number; grade: Grade } | null
+  timing: { id: number; grade: Grade; power?: number } | null
   /** The last serve's speed, flashed big on screen. */
   serveFlash: { id: number; kmh: number } | null
   muted: boolean
@@ -93,7 +93,7 @@ interface GameStore {
   point(winner: Side, title: string, detail?: string, kind?: 'winner' | 'ace' | 'error' | 'double'): PointOutcome
   setServeNumber(n: 1 | 2): void
   showToast(title: string, tone: Toast['tone'], detail?: string): void
-  showTiming(grade: Grade): void
+  showTiming(grade: Grade, power?: number): void
   showServeSpeed(kmh: number): void
   setRally(n: number): void
   /** Starts an online match with the room's settings; the score then comes from the server. */
@@ -255,7 +255,7 @@ export const useGame = create<GameStore>((set, get) => ({
   setServeNumber: (serveNumber) => set({ serveNumber }),
   showToast: (title, tone, detail) => set({ toast: { id: seq++, title, tone, detail } }),
   showServeSpeed: (kmh) => set({ serveFlash: { id: seq++, kmh } }),
-  showTiming: (grade) => set({ timing: { id: seq++, grade } }),
+  showTiming: (grade, power) => set({ timing: { id: seq++, grade, power } }),
   setRally: (rally) => set({ stats: { ...get().stats, rally } }),
   startOnline: ({ format, surface, pace, opponent, match }) => {
     setSurface(surface)
@@ -313,4 +313,6 @@ export const hudLive = {
   serveAim: 0,
   /** Where my server stands on screen (CSS px), so the serve meter can sit beside them. */
   serveAnchor: { x: 0, y: 0, ok: false },
+  /** Where the called shot would go with the stick as it is now (shown on the far court). */
+  aimTarget: null as { x: number; z: number } | null,
 }

@@ -185,6 +185,8 @@ export interface StrikeIntent {
   aim: { x: number; y: number }
   /** Groundstrokes: when the shot key was pressed (server clock ms). */
   pressT?: number
+  /** Groundstrokes: how long the key was held into the stroke, 0..1 (see POWER_HOLD). */
+  power?: number
   /** Sideways distance from body to ball (+ forehand side). */
   lateral: number
   /** Hitter's right-hand direction, x component in the hitter's own view. */
