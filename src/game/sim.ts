@@ -1,4 +1,4 @@
-import type { RapierRigidBody } from '@react-three/rapier'
+import type { BallBody } from '../physics/ballBody'
 import type { Side } from './constants'
 import type { Grade, ShotType } from './tuning'
 
@@ -52,7 +52,7 @@ export interface BallEvent {
 }
 
 export const sim = {
-  ball: null as RapierRigidBody | null,
+  ball: null as BallBody | null,
   time: 0,
   phase: 'idle' as RallyPhase,
   server: 0 as Side,

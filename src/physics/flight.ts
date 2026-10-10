@@ -1,8 +1,9 @@
 import { BALL, COURT, PHYSICS, netHeightAt } from '../game/constants'
 
-// Rapier handles gravity, bounces, friction and collisions for the real ball.
-// No physics engine models air, so drag and Magnus lift are added here as forces.
-// The same model also powers a lightweight predictor (landing marker, AI, shot solver).
+// The whole ball, analytically: air (drag and Magnus lift), gravity, the tennis bounce, the net
+// (body and tape) and the fence, in one step (stepBall). The live ball (ballBody.ts), the
+// predictor (landing marker, AI, shot solver) and the multiplayer server all run it, so they
+// agree exactly. No physics engine: a tennis ball needs none of a rigid-body solver.
 
 export interface V3 {
   x: number
@@ -98,8 +99,12 @@ export interface Flight {
   /** Height of the ball as it crosses the net plane, if it does before the first bounce. */
   netCrossY: number | null
   netCrossX: number | null
-  /** The ball meets the net below the tape and stops there (the flight ends at the net). */
+  /** The ball meets the body of the net (below the tape) before its first bounce. */
   intoNet: boolean
+  /** Time of the first contact with the net, body or tape (null: it never touched). */
+  netT: number | null
+  /** The ball clipped the tape (a net cord) before its first bounce. */
+  cord: boolean
 }
 
 export interface SimOptions {
@@ -108,19 +113,150 @@ export interface SimOptions {
   maxBounces?: number
   /** Store every n-th step as a sample. */
   sampleEvery?: number
+  /**
+   * false: pure flight through the net plane, stopping at the net body (the shot solver's
+   * trials). Default: the full ball, net cords and the fence included, as the live ball plays.
+   */
+  collide?: boolean
 }
 
 const tmpF: V3 = { x: 0, y: 0, z: 0 }
 
+/** What happened to the ball during one step. */
+export interface StepEvents {
+  /** Bounced off the court: where, and its speed into the ground. */
+  bounce: { x: number; z: number; vy: number } | null
+  net: 'tape' | 'body' | null
+  fence: boolean
+  /** Crossed the net plane (inside the posts) this step, at this height and x. */
+  cross: { x: number; y: number } | null
+}
+
+export function newEvents(): StepEvents {
+  return { bounce: null, net: null, fence: false, cross: null }
+}
+
+export function resetEvents(ev: StepEvents) {
+  ev.bounce = null
+  ev.net = null
+  ev.fence = false
+  ev.cross = null
+}
+
+/** Restitution off the net tape (a taut cable inside the cloth band): a cord ball keeps little. */
+const TAPE_E = 0.3
+/** Radius of the tape's rounded top, for the contact normal. */
+const TAPE_R = 0.006
+
 /**
- * Integrates the flight the same way Rapier does (semi-implicit Euler), with an
- * approximate impulse-based bounce matching the collider materials.
+ * One physics step of the ball: drag, Magnus lift and gravity (semi-implicit Euler), then the
+ * court, the net and the fence. The live ball, the predictor and the server all step through
+ * this, so they agree exactly. Mutates p, v, w; reports contacts in `ev` (reset by the caller).
  */
+export function stepBall(p: V3, v: V3, w: V3, dt: number, ev: StepEvents, collide = true) {
+  const r = BALL.radius
+  aeroForce(v, w, tmpF)
+  const damp = 1 / (1 + dt * SPIN_DAMPING)
+  w.x *= damp
+  w.y *= damp
+  w.z *= damp
+  const invM = 1 / BALL.mass
+  v.x += tmpF.x * invM * dt
+  v.y += (tmpF.y * invM + PHYSICS.gravity) * dt
+  v.z += tmpF.z * invM * dt
+  const px = p.x
+  const py = p.y
+  const pz = p.z
+  p.x += v.x * dt
+  p.y += v.y * dt
+  p.z += v.z * dt
+
+  // The net: crossing its plane inside the posts.
+  if (pz !== 0 && Math.sign(pz) !== Math.sign(p.z)) {
+    const f = pz / (pz - p.z)
+    const xc = px + (p.x - px) * f
+    const yc = py + (p.y - py) * f
+    if (Math.abs(xc) < COURT.netPostX) {
+      ev.cross = { x: xc, y: yc }
+      const h = netHeightAt(xc)
+      if (yc - r < h) {
+        const side = Math.sign(pz)
+        if (!collide || yc + r * 0.3 < h) {
+          // Into the body of the net: it swallows the pace and the ball drops on this side.
+          ev.net = 'body'
+          if (collide) {
+            p.x = xc
+            p.y = yc
+            p.z = side * (r + 0.005)
+            v.z = -v.z * 0.1
+            v.x *= 0.3
+            v.y *= 0.3
+            w.x *= 0.3
+            w.y *= 0.3
+            w.z *= 0.3
+          }
+        } else {
+          // The tape: it rolls over or falls back, by where on the rounded top it struck.
+          ev.net = 'tape'
+          const dy = yc - h
+          const reach = r + TAPE_R
+          const dz = side * Math.sqrt(Math.max(0, reach * reach - dy * dy))
+          const len = Math.hypot(dy, dz) || 1
+          const ny = dy / len
+          const nz = dz / len
+          const vn = v.y * ny + v.z * nz
+          if (vn < 0) {
+            v.y -= (1 + TAPE_E) * vn * ny
+            v.z -= (1 + TAPE_E) * vn * nz
+          }
+          v.x *= 0.85
+          v.y *= 0.85
+          v.z *= 0.85
+          w.x *= 0.6
+          w.y *= 0.6
+          w.z *= 0.6
+          p.x = xc
+          p.y = h + ny * reach
+          p.z = nz * reach
+        }
+      }
+    }
+  }
+
+  if (p.y <= r && v.y < 0) {
+    ev.bounce = { x: p.x, z: p.z, vy: v.y }
+    p.y = r
+    applyBounce(v, w)
+  }
+
+  // The fence (its inside faces), up to its top; above it the ball leaves the venue.
+  if (collide && p.y < COURT.fenceHeight) {
+    if (Math.abs(p.x) > COURT.fenceX - r && v.x * p.x > 0) {
+      p.x = Math.sign(p.x) * (COURT.fenceX - r)
+      v.x *= -0.25
+      v.y *= 0.7
+      v.z *= 0.7
+      ev.fence = true
+    }
+    if (Math.abs(p.z) > COURT.fenceZ - r && v.z * p.z > 0) {
+      p.z = Math.sign(p.z) * (COURT.fenceZ - r)
+      v.z *= -0.25
+      v.y *= 0.7
+      v.x *= 0.7
+      ev.fence = true
+    }
+  }
+}
+
+const simEv = newEvents()
+
+/** Flies the ball from (p0, v0, w0): samples, bounces, and how it met the net. */
 export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight {
   const dt = opts.dt ?? PHYSICS.timeStep
   const maxT = opts.maxT ?? 4
   const maxBounces = opts.maxBounces ?? 2
   const every = opts.sampleEvery ?? 1
+  const collide = opts.collide ?? true
   const p = { ...p0 }
   const v = { ...v0 }
   const w = { ...w0 }
@@ -128,44 +264,35 @@ export function simulate(p0: V3, v0: V3, w0: V3, opts: SimOptions = {}): Flight 
   const bounces: Bounce[] = []
   let netCrossY: number | null = null
   let netCrossX: number | null = null
-  const r = BALL.radius
-  const invM = 1 / BALL.mass
+  let intoNet = false
+  let cord = false
+  let netT: number | null = null
   let step = 0
 
   for (let t = 0; t <= maxT; t += dt) {
     if (step++ % every === 0) samples.push({ t, x: p.x, y: p.y, z: p.z, vx: v.x, vy: v.y, vz: v.z })
-    aeroForce(v, w, tmpF)
-    const damp = 1 / (1 + dt * SPIN_DAMPING)
-    w.x *= damp
-    w.y *= damp
-    w.z *= damp
-    v.x += tmpF.x * invM * dt
-    v.y += (tmpF.y * invM + PHYSICS.gravity) * dt
-    v.z += tmpF.z * invM * dt
-    const pz = p.z
-    p.x += v.x * dt
-    p.y += v.y * dt
-    p.z += v.z * dt
-
-    if (netCrossY === null && bounces.length === 0 && Math.sign(pz) !== Math.sign(p.z) && pz !== 0) {
-      const f = pz / (pz - p.z)
-      netCrossY = p.y - v.y * dt * (1 - f)
-      netCrossX = p.x - v.x * dt * (1 - f)
-      // Below the tape (inside the posts) the net stops it: the prediction must not fly on.
-      if (Math.abs(netCrossX) < COURT.netPostX && netCrossY + r < netHeightAt(netCrossX) - 0.02) {
-        samples.push({ t, x: netCrossX, y: netCrossY, z: 0, vx: 0, vy: 0, vz: 0 })
-        return { samples, bounces, netCrossY, netCrossX, intoNet: true }
-      }
+    resetEvents(simEv)
+    stepBall(p, v, w, dt, simEv, collide)
+    if (simEv.cross && netCrossY === null && bounces.length === 0) {
+      netCrossY = simEv.cross.y
+      netCrossX = simEv.cross.x
     }
-
-    if (p.y <= r && v.y < 0) {
-      bounces.push({ t, x: p.x, z: p.z, vy: v.y })
+    if (simEv.net && netT === null) netT = t
+    if (simEv.net && bounces.length === 0) {
+      if (simEv.net === 'body') intoNet = true
+      else cord = true
+    }
+    // Without collisions the flight ends at the net body (nothing to say past it).
+    if (!collide && intoNet) {
+      samples.push({ t, x: p.x, y: p.y, z: 0, vx: 0, vy: 0, vz: 0 })
+      break
+    }
+    if (simEv.bounce) {
+      bounces.push({ t, x: simEv.bounce.x, z: simEv.bounce.z, vy: simEv.bounce.vy })
       if (bounces.length >= maxBounces) break
-      p.y = r
-      applyBounce(v, w)
     }
   }
-  return { samples, bounces, netCrossY, netCrossX, intoNet: false }
+  return { samples, bounces, netCrossY, netCrossX, intoNet, netT, cord }
 }
 
 export interface BallState {
@@ -174,33 +301,18 @@ export interface BallState {
   w: V3
 }
 
+const advEv = newEvents()
+
 /**
- * Ball state `duration` seconds after (p0, v0, w0): the same integration as `simulate`,
- * bounces included. Used to fast-forward a networked ball to the present.
+ * Ball state `duration` seconds after (p0, v0, w0): the same steps as `simulate`, contacts
+ * included. Used to fast-forward a networked ball to the present.
  */
 export function advance(p0: V3, v0: V3, w0: V3, duration: number, dt: number = PHYSICS.timeStep): BallState {
   const p = { ...p0 }
   const v = { ...v0 }
   const w = { ...w0 }
-  const invM = 1 / BALL.mass
   const steps = Math.max(0, Math.round(duration / dt))
-  for (let i = 0; i < steps; i++) {
-    aeroForce(v, w, tmpF)
-    const damp = 1 / (1 + dt * SPIN_DAMPING)
-    w.x *= damp
-    w.y *= damp
-    w.z *= damp
-    v.x += tmpF.x * invM * dt
-    v.y += (tmpF.y * invM + PHYSICS.gravity) * dt
-    v.z += tmpF.z * invM * dt
-    p.x += v.x * dt
-    p.y += v.y * dt
-    p.z += v.z * dt
-    if (p.y <= BALL.radius && v.y < 0) {
-      p.y = BALL.radius
-      applyBounce(v, w)
-    }
-  }
+  for (let i = 0; i < steps; i++) stepBall(p, v, w, dt, advEv)
   return { p, v, w }
 }
 
@@ -288,7 +400,7 @@ export const TANGENTIAL_E = 0.12
 /** Moment of inertia factor of a tennis ball (I = ALPHA m r^2). */
 export const ALPHA = 0.55
 
-/** Rapier's angular damping on the ball, mirrored by the predictor (spin decays ~5%/s). */
+/** Spin decay of the ball in flight (~5%/s). */
 export const SPIN_DAMPING = 0.05
 
 /** Unit spin axis that produces topspin for a ball travelling along horizontal direction (dx, dz). */
@@ -338,8 +450,8 @@ function launch(req: ShotRequest, speed: number, pitch: number): { v: V3; w: V3;
 }
 
 // The solver runs many trial flights per shot; it uses the physics step (1/120 s), which
-// also matches what Rapier integrates, and stops sampling (only the bounce matters).
-const SOLVER_OPTS: SimOptions = { maxBounces: 1, maxT: 5, sampleEvery: 1_000_000 }
+// also matches the live ball's step, and stops sampling (only the bounce matters).
+const SOLVER_OPTS: SimOptions = { maxBounces: 1, maxT: 5, sampleEvery: 1_000_000, collide: false }
 
 function carry(req: ShotRequest, speed: number, pitch: number): { dist: number; flight: Flight } {
   const { v, w, d } = launch(req, speed, pitch)

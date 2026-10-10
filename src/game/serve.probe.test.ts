@@ -1,17 +1,11 @@
 /// <reference types="node" />
 import { writeFileSync } from 'node:fs'
-import { beforeAll, it } from 'vitest'
-import RAPIER from '@dimforge/rapier3d-compat'
-import type { RapierRigidBody } from '@react-three/rapier'
+import { it } from 'vitest'
 import { HUMAN, PHYSICS } from './constants'
-import { onFenceTouch, onNetTouch, resetForServe, stepGame } from './director'
+import { resetForServe, stepGame } from './director'
 import { sim } from './sim'
 import { useGame } from './store'
 import { botHuman, buildWorld } from './testWorld'
-
-beforeAll(async () => {
-  await RAPIER.init()
-})
 
 // Balance probe (slow, opt-in): PROBE=1 npx vitest run src/game/serve.probe.test.ts
 // Plays a few hundred points per AI level with the scripted player and writes how often
@@ -21,14 +15,13 @@ it.skipIf(!process.env.PROBE)(
   () => {
     const out: string[] = []
     for (const level of ['easy', 'pro', 'ace'] as const) {
-      const { world, ball, netHandles, fenceHandles } = buildWorld()
-      sim.ball = ball as unknown as RapierRigidBody
+      const { ball } = buildWorld()
+      sim.ball = ball
       const g = useGame.getState()
       g.setFormat('match')
       g.setDifficulty(level)
       g.start()
       resetForServe()
-      const q = new RAPIER.EventQueue(true)
       const exploit = !!process.env.EXPLOIT
       const bot = {
         tossAt: -1,
@@ -50,12 +43,6 @@ it.skipIf(!process.env.PROBE)(
         if (sim.lastHitter === null) serverAtStart = sim.server
         botHuman(bot)
         stepGame(PHYSICS.timeStep)
-        world.step(q)
-        q.drainCollisionEvents((h1, h2, s) => {
-          if (!s) return
-          if (netHandles.has(h1) || netHandles.has(h2)) onNetTouch()
-          if (fenceHandles.has(h1) || fenceHandles.has(h2)) onFenceTouch()
-        })
         hitsMax = Math.max(hitsMax, sim.hits)
         const t = useGame.getState().toast
         if (t && t.id !== lastToast) {

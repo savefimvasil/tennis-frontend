@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { BallCollider, RigidBody, type RapierRigidBody } from '@react-three/rapier'
 import { Trail } from '@react-three/drei'
 import * as THREE from 'three'
 import { BALL } from '../game/constants'
 import { sim } from '../game/sim'
+import { BallBody } from '../physics/ballBody'
 import { ballTexture } from './textures'
 
 export function Ball() {
-  const body = useRef<RapierRigidBody>(null!)
+  const body = useMemo(() => new BallBody(), [])
+  const root = useRef<THREE.Group>(null!)
   const tex = useMemo(() => ballTexture(), [])
   const squashGroup = useRef<THREE.Group>(null!)
   const spinMesh = useRef<THREE.Mesh>(null!)
@@ -26,8 +27,9 @@ export function Ball() {
   // Squash on impact. The squash group is kept world-aligned (it cancels the body's
   // rotation) while the inner mesh re-applies it, so the felt still visibly spins.
   useFrame((_, dt) => {
-    const b = body.current
-    if (!b) return
+    const b = body
+    root.current.position.set(b.p.x, b.p.y, b.p.z)
+    root.current.quaternion.set(b.q.x, b.q.y, b.q.z, b.q.w)
     const f = fx.current
     for (const e of sim.events) {
       if (e.id <= f.seen) continue
@@ -66,22 +68,13 @@ export function Ball() {
     spinMesh.current.quaternion.copy(A).invert().multiply(R)
   })
   useEffect(() => {
-    sim.ball = body.current
+    sim.ball = body
     return () => {
       sim.ball = null
     }
-  }, [])
+  }, [body])
   return (
-    <RigidBody
-      ref={body}
-      colliders={false}
-      ccd
-      canSleep={false}
-      position={[0, 1.4, 12]}
-      linearDamping={0}
-      angularDamping={0.05}
-    >
-      <BallCollider args={[BALL.radius]} mass={BALL.mass} restitution={BALL.restitution} friction={BALL.friction} />
+    <group ref={root}>
       <Trail width={0.24} length={4} decay={1.2} color="#f6ffbf" attenuation={(t) => t * t * t}>
         <group ref={squashGroup}>
           <mesh ref={spinMesh} castShadow>
@@ -95,6 +88,6 @@ export function Ball() {
           </mesh>
         </group>
       </Trail>
-    </RigidBody>
+    </group>
   )
 }

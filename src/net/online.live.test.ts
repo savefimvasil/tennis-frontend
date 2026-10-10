@@ -5,7 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 // Live online match against a running server, one player per process:
 //   LIVE_SERVER=http://localhost:3000 ROLE=host  CODE_FILE=/tmp/code npx vitest run src/net/online.live.test.ts &
 //   LIVE_SERVER=http://localhost:3000 ROLE=guest CODE_FILE=/tmp/code npx vitest run src/net/online.live.test.ts
-// Each process runs the real director, net layer and Rapier physics in real time with a
+// Each process runs the real director, net layer and ball physics in real time with a
 // scripted player, so the server's validation sees honest clients with real latency.
 
 const SERVER = process.env.LIVE_SERVER
@@ -16,20 +16,16 @@ const SECONDS = Number(process.env.SECONDS ?? 90)
 describe.skipIf(!SERVER)('live online match', () => {
   it(`plays as ${ROLE}`, async () => {
     Object.assign(globalThis, { location: new URL(`http://localhost/?server=${SERVER}`) })
-    const RAPIER = (await import('@dimforge/rapier3d-compat')).default
-    await RAPIER.init()
     const { buildWorld } = await import('../game/testWorld')
     const { sim } = await import('../game/sim')
     const { useGame } = await import('../game/store')
-    const { stepGame, onNetTouch, onFenceTouch } = await import('../game/director')
+    const { stepGame } = await import('../game/director')
     const { virtualInput } = await import('../input/input')
     const { PHYSICS } = await import('../game/constants')
     const net = await import('./net')
-    type Body = import('@react-three/rapier').RapierRigidBody
 
-    const { world, ball, netHandles, fenceHandles } = buildWorld()
-    sim.ball = ball as unknown as Body
-    const queue = new RAPIER.EventQueue(true)
+    const { ball } = buildWorld()
+    sim.ball = ball
 
     net.useNet.getState().setName(ROLE === 'host' ? 'Hosty' : 'Guesty')
     net.startNet()
@@ -112,12 +108,6 @@ describe.skipIf(!SERVER)('live online match', () => {
         acc -= dt
         bot()
         stepGame(dt)
-        world.step(queue)
-        queue.drainCollisionEvents((h1, h2, started) => {
-          if (!started) return
-          if (netHandles.has(h1) || netHandles.has(h2)) onNetTouch()
-          if (fenceHandles.has(h1) || fenceHandles.has(h2)) onFenceTouch()
-        })
       }
       maxRally = Math.max(maxRally, sim.hits)
       const toast = useGame.getState().toast

@@ -8,8 +8,6 @@ export interface LabView {
   trajectory: boolean
   /** Velocity, spin axis, drag and Magnus force on the ball. */
   forces: boolean
-  /** Rapier's own collider wireframes. */
-  colliders: boolean
   /** r3f-perf panel: fps, GPU/CPU time, draw calls. */
   perf: boolean
   /** Time scale of the simulation, for watching spin and bounces. */
@@ -19,7 +17,6 @@ export interface LabView {
 export const useLab = create<LabView>(() => ({
   trajectory: true,
   forces: true,
-  colliders: false,
   perf: false,
   timeScale: 1,
 }))

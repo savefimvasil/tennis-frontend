@@ -1,31 +1,24 @@
-import { beforeAll, describe, expect, it } from 'vitest'
-import RAPIER from '@dimforge/rapier3d-compat'
-import type { RapierRigidBody } from '@react-three/rapier'
+import { describe, expect, it } from 'vitest'
 import { PHYSICS } from './constants'
 import { botHuman, buildWorld } from './testWorld'
-import { onFenceTouch, onNetTouch, resetForServe, stepGame } from './director'
+import { resetForServe, stepGame } from './director'
 import { sim } from './sim'
 import { useGame } from './store'
 
-// Plays whole matches headlessly: real Rapier physics, the real director and AI,
+// Plays whole matches headlessly: the real ball model, the real director and AI,
 // and a simple scripted bot standing in for the human player.
-
-beforeAll(async () => {
-  await RAPIER.init()
-})
 
 describe('full match simulation', () => {
   it.each(['easy', 'pro', 'ace'] as const)(
     'plays a quick match against %s to completion',
     (difficulty) => {
-      const { world, ball, netHandles, fenceHandles } = buildWorld()
-      sim.ball = ball as unknown as RapierRigidBody
+      const { ball } = buildWorld()
+      sim.ball = ball
       const g = useGame.getState()
       g.setFormat('quick')
       g.setDifficulty(difficulty)
       g.start()
       resetForServe()
-      const queue = new RAPIER.EventQueue(true)
       const endings = new Map<string, number>()
       let lastToast = 0
       let longestPhase = 0
@@ -44,12 +37,6 @@ describe('full match simulation', () => {
       while (useGame.getState().match.winner === null && steps < 120 * 60 * 150) {
         botHuman(bot)
         stepGame(dt)
-        world.step(queue)
-        queue.drainCollisionEvents((h1, h2, started) => {
-          if (!started) return
-          if (netHandles.has(h1) || netHandles.has(h2)) onNetTouch()
-          if (fenceHandles.has(h1) || fenceHandles.has(h2)) onFenceTouch()
-        })
         steps++
         const st = useGame.getState()
         if (st.toast && st.toast.id !== lastToast) {

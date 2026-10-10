@@ -3,7 +3,7 @@
 **Play: https://maybe-tennis.com/**
 
 A free 3D tennis game in the browser: rally against the CPU on hard, clay or grass, or play a
-friend online. Built with React, Three.js (@react-three/fiber), Rapier physics and
+friend online. Built with React, Three.js (@react-three/fiber), an analytic ball model and
 post-processing.
 
 A single-player build also runs on GitHub Pages:
@@ -14,7 +14,7 @@ https://savefimvasil.github.io/tennis-frontend/. Both are deployed from `main` b
 ```bash
 npm install
 npm run dev      # http://localhost:5173
-npm test         # scoring, flight model, Rapier agreement and full headless match simulations
+npm test         # scoring, flight model, live ball vs predictor and full headless match simulations
 npm run build
 npm run format   # Prettier
 ```
@@ -114,7 +114,7 @@ Open the game with `?lab` (e.g. `http://localhost:5173/?lab`) to get a live tuni
 ([leva](https://github.com/pmndrs/leva)) and on-court visualisation:
 
 - **View:** predicted flight (yellow, orange after the bounce), arrows on the ball for velocity (white),
-  spin axis (magenta), drag (red) and Magnus force (cyan), Rapier collider wireframes, the
+  spin axis (magenta), drag (red) and Magnus force (cyan), the
   [r3f-perf](https://github.com/utsuboco/r3f-perf) panel, and slow motion.
 - **Air:** drag coefficient, Magnus multiplier, wind.
 - **Shots:** club pace and speed/spin/net clearance/depth of every shot.
@@ -145,6 +145,7 @@ Players are [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketb
 - `src/scene` – court, net, venue, lighting, post-processing, ball, effects, camera, athletes
 - `src/ui` – HUD and menus
 
-Rapier detects contacts and handles the net, fence and rolling. Air drag and Magnus lift are added as
-forces each physics step, and bounces on the court use a tennis-specific model (speed-dependent
-restitution, sliding or gripping friction, hollow-ball inertia) shared with the predictor.
+The ball is analytic, with no physics engine: air drag and Magnus lift (spin-dependent), gravity, a
+tennis-specific bounce (speed-dependent restitution, sliding or gripping friction with tangential
+restitution, hollow-ball inertia), the net (its body stops the ball, the tape deflects it) and the
+fence, all in one step function shared by the live ball, the predictor and the multiplayer server.

@@ -61,7 +61,7 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* The 3D scene (three, Rapier, post-processing) streams in after the menu has painted. */}
+      {/* The 3D scene (three, post-processing) streams in after the menu has painted. */}
       <Suspense fallback={null}>
         <Scene />
       </Suspense>

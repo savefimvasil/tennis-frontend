@@ -4,8 +4,6 @@ import { hudLive, useGame } from './store'
 import { pushEvent, sim, type Athlete } from './sim'
 import { AI_LEVELS, PACE, PLAYER, ONLINE_HELP, PLAYER_HELP, SERVE, TIMING, type Grade, type ShotType } from './tuning'
 import {
-  aeroForce,
-  applyBounce,
   setWind,
   wind,
   inServiceBox,
@@ -33,9 +31,8 @@ import {
 import { chooseShot, pickGrade, planIntercept } from '../ai/opponent'
 
 // The match director runs once per physics step (120 Hz): input, movement,
-// hitting, AI and refereeing. Rapier does the actual ball physics.
+// hitting, AI and refereeing. The ball itself is physics/ballBody.ts.
 
-const force: V3 = { x: 0, y: 0, z: 0 }
 let serveClock = 0
 /** The player's serve aim, swept during the toss (see SERVE.aimRate). */
 let serveAim = 0
@@ -801,10 +798,10 @@ function onBounce(p: V3, vy: number) {
   const hitter = sim.lastHitter
   if (hitter === null || sim.phase === 'dead' || sim.phase === 'idle') return
   const receiver = other(hitter)
-  // Online the server rules on its own model of the flight. Rapier's bounce point can sit a few
-  // centimetres away from it, so a line ball could be "out" here and "in" on the server: this
-  // client then froze while the server waited for the return and gave the hitter a winner.
-  // Judge the first bounce where the server's model puts it; with no server flight, never freeze.
+  // Online the server rules on its own model of the flight. The local ball runs the same model,
+  // but from a slightly different start (the hit arrives over the network), so a line ball could
+  // still be "out" here and "in" on the server. Judge the first bounce where the server's flight
+  // puts it; with no server flight, never freeze.
   if (online && sim.bounces === 1) {
     const at = serverBounce()
     if (!at) {
@@ -900,14 +897,9 @@ export function stepGame(dt: number) {
   if (sim.held) {
     const s = sim.athletes[sim.server]
     const tp = tossPoint(s)
-    ball.setTranslation(tp, true)
-    ball.setLinvel({ x: 0, y: 0, z: 0 }, true)
-    ball.setAngvel({ x: 0, y: 0, z: 0 }, true)
-    ball.resetForces(true)
-  } else {
-    aeroForce(v, ball.angvel(), force)
-    ball.resetForces(true)
-    ball.addForce(force, true)
+    ball.setTranslation(tp)
+    ball.setLinvel({ x: 0, y: 0, z: 0 })
+    ball.setAngvel({ x: 0, y: 0, z: 0 })
   }
 
   if (netRepredictAt && sim.time >= netRepredictAt && !sim.held) {
@@ -917,29 +909,25 @@ export function stepGame(dt: number) {
     if (sim.bounces === 0) sim.landing = land ? { x: land.x, z: land.z, t: sim.time } : null
   }
 
-  const hitsBefore = sim.hits
   updateHuman(dt, input, p, v)
   if (online) updateRemote(dt)
   else updateAI(dt, p, v)
 
-  const vNow = ball.linvel()
-  const pNow = ball.translation()
-  if (!sim.held && sim.hits === hitsBefore && sim.prevVy < -0.4 && vNow.y > 0.05 && pNow.y < 0.25) {
-    // Rapier found the contact; replace its generic response with the tennis bounce model
-    // (the same one the predictor uses), starting from the pre-impact state.
-    const v2 = { ...sim.prevV }
-    const w2 = { ...sim.prevW }
-    applyBounce(v2, w2)
-    ball.setLinvel(v2, true)
-    ball.setAngvel(w2, true)
-    onBounce(pNow, sim.prevVy)
+  // The ball: one step of the shared flight model, and whatever it touched on the way.
+  if (!sim.held) {
+    ball.step(dt)
+    const ev = ball.events
+    if (ev.net) onNetTouch()
+    if (ev.fence) onFenceTouch()
+    if (ev.bounce) onBounce({ x: ev.bounce.x, y: BALL.radius, z: ev.bounce.z }, ev.bounce.vy)
   }
+  const pNow = ball.translation()
   const vEnd = ball.linvel()
   const wEnd = ball.angvel()
   sim.prevVy = vEnd.y
   sim.prevV = { x: vEnd.x, y: vEnd.y, z: vEnd.z }
   sim.prevW = { x: wEnd.x, y: wEnd.y, z: wEnd.z }
-  hudLive.ballSpeedKmh = Math.hypot(vNow.x, vNow.y, vNow.z) * 3.6
+  hudLive.ballSpeedKmh = Math.hypot(vEnd.x, vEnd.y, vEnd.z) * 3.6
 
   // Balls that leave the venue count as hitting the fence.
   if (!sim.held && (Math.abs(pNow.z) > COURT.fenceZ + 0.5 || Math.abs(pNow.x) > COURT.fenceX + 0.5)) {

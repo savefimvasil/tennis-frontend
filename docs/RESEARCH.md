@@ -4,7 +4,7 @@
 
 | Library | What it gives | Fit for this game |
 | --- | --- | --- |
-| **Rapier** (`@react-three/rapier`, Rust→WASM, in use) | Rigid bodies, CCD, contact events, a debug renderer, determinism option | Keep. The ball/court/net/fence contacts and CCD are exactly what we need. `<Physics debug>` is now wired to the lab's "colliders" toggle. |
+| **Rapier** (`@react-three/rapier`, Rust→WASM, was in use) | Rigid bodies, CCD, contact events, a debug renderer | Removed: the ball is now fully analytic (`flight.ts` `stepBall`, `ballBody.ts`), so the live ball, the predictor and the server take the very same steps. Saves ~2 MB of WASM. |
 | Jolt (`jolt-physics`, C++→WASM) | Fast, maintained by the engine author, soft bodies/cloth | Only worth it for a cloth net. Not a reason to switch engines. |
 | Havok (`@babylonjs/havok`) | Battle-tested, first-class only in Babylon.js | Thin Three.js docs, no R3F bindings. No gain here. |
 | cannon-es | Pure JS, simple | No CCD, which a 50 m/s ball needs. Slower than Rapier. |
@@ -12,7 +12,7 @@
 **No general physics engine models air.** Drag, Magnus lift and the tennis bounce (slide→roll friction
 with spin, speed-dependent restitution) are tennis-specific and stay as our own small model in
 `src/physics/flight.ts`. That is what every engine-based tennis game does. The code is ~150 lines,
-covered by tests, and checked against Rapier in `rapier-agreement.test.ts`.
+covered by tests; `ballBody.test.ts` checks the live ball takes exactly the predictor's path.
 
 What the libraries do add, so effects can be **seen and tuned rather than hand-coded**:
 
@@ -20,10 +20,9 @@ What the libraries do add, so effects can be **seen and tuned rather than hand-c
 | --- | --- | --- |
 | Live sliders for every physics/gameplay number | **leva** | `src/lab/LabPanel.tsx` (`?lab`) |
 | FPS, GPU/CPU time, draw calls | **r3f-perf** | lab "perf" toggle |
-| Collider wireframes | **Rapier debug renderer** | lab "colliders" toggle |
 | Thick trajectory lines | **drei `<Line>`** (Line2) | lab "trajectory" |
 | Force/spin arrows | three `ArrowHelper` | lab "forces" |
-| Slow motion | `useRapier().step()` | lab "time scale" |
+| Slow motion | the game loop's time scale | lab "time scale" |
 | Ball trail (in game) | drei `<Trail>` | `Ball.tsx` |
 
 Further candidates, not added yet:

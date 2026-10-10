@@ -1,12 +1,9 @@
 import { useMemo } from 'react'
 import * as THREE from 'three'
-import { CoefficientCombineRule, CuboidCollider, RigidBody } from '@react-three/rapier'
 import { COURT, netHeightAt } from '../game/constants'
-import { onNetTouch } from '../game/director'
 import { netTexture } from './textures'
 
 const PX = COURT.netPostX
-const SEGMENTS = 16
 
 /** A strip that follows the sagging net cord, from `bottom(x)` to `top(x)`. */
 function stripGeometry(top: (x: number) => number, bottom: (x: number) => number, segs = 64) {
@@ -88,26 +85,6 @@ export function Net() {
           <meshStandardMaterial color="#f2f2ee" roughness={0.5} />
         </mesh>
       ))}
-
-      {/* Soft net: the ball drops dead against it. */}
-      <RigidBody type="fixed" colliders={false}>
-        {Array.from({ length: SEGMENTS }, (_, i) => {
-          const w = (PX * 2) / SEGMENTS
-          const x = -PX + w * (i + 0.5)
-          const h = netHeightAt(x)
-          return (
-            <CuboidCollider
-              key={i}
-              args={[w / 2, h / 2, 0.015]}
-              position={[x, h / 2, 0]}
-              restitution={0.05}
-              restitutionCombineRule={CoefficientCombineRule.Min}
-              friction={0.9}
-              onCollisionEnter={onNetTouch}
-            />
-          )
-        })}
-      </RigidBody>
     </group>
   )
 }

@@ -1,9 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { CuboidCollider, RigidBody } from '@react-three/rapier'
-import { BALL, COURT } from '../game/constants'
-import { onFenceTouch } from '../game/director'
+import { COURT } from '../game/constants'
 import { radialTexture } from './textures'
 import { DETAIL, detailSurfaceMaterial, macroMap, surfaceMaps, surfaceMaterial } from './surfaceTextures'
 import { WithFallback } from './PbrMaterial'
@@ -190,35 +188,6 @@ export function Court() {
       <WithFallback fallback={<ProceduralSurfaces />}>
         <PhotoSurfaces />
       </WithFallback>
-
-      {/* Physics: the playing surface and the fence */}
-      <RigidBody type="fixed" colliders={false}>
-        <CuboidCollider
-          args={[60, 0.5, 60]}
-          position={[0, -0.5, 0]}
-          restitution={BALL.restitution}
-          friction={BALL.friction}
-        />
-      </RigidBody>
-      <RigidBody type="fixed" colliders={false}>
-        {(
-          [
-            [COURT.fenceX + 0.1, 0, 0.1, COURT.fenceZ],
-            [-COURT.fenceX - 0.1, 0, 0.1, COURT.fenceZ],
-            [0, COURT.fenceZ + 0.1, COURT.fenceX, 0.1],
-            [0, -COURT.fenceZ - 0.1, COURT.fenceX, 0.1],
-          ] as const
-        ).map(([x, z, hx, hz], i) => (
-          <CuboidCollider
-            key={i}
-            args={[hx, COURT.fenceHeight / 2, hz]}
-            position={[x, COURT.fenceHeight / 2, z]}
-            restitution={0.25}
-            friction={0.8}
-            onCollisionEnter={onFenceTouch}
-          />
-        ))}
-      </RigidBody>
     </group>
   )
 }

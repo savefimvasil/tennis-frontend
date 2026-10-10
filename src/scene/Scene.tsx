@@ -1,8 +1,7 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useThree } from '@react-three/fiber'
 import { Canvas } from '@react-three/fiber'
 import { Preload } from '@react-three/drei'
-import { Physics, useBeforePhysicsStep, useRapier } from '@react-three/rapier'
 import { useFrame } from '@react-three/fiber'
 import { LAB_ENABLED, useLab } from '../lab/lab'
 import * as THREE from 'three'
@@ -26,13 +25,6 @@ import { CourtyardCourt, GardenCourt } from './OutdoorVenues'
 
 // Physics Lab overlays (?lab): loaded only when the lab is open.
 const LabScene = LAB_ENABLED ? lazy(() => import('../lab/LabScene')) : null
-
-/** Slow motion for the lab: Physics is paused and stepped here with scaled time. */
-function SlowStepper({ scale }: { scale: number }) {
-  const { step } = useRapier()
-  useFrame((_, dt) => step(dt * scale))
-  return null
-}
 
 /** The near player is always this client. Online, each player keeps the outfit they chose. */
 function Players({ skin }: { skin: string }) {
@@ -78,8 +70,24 @@ function ServeAnchor() {
   return null
 }
 
-function GameLoop() {
-  useBeforePhysicsStep(() => stepGame(PHYSICS.timeStep))
+/**
+ * The fixed-step game loop: players, AI and the ball advance in 1/120 s steps, as many as the
+ * frame's time needs (scaled for the lab's slow motion), and not at all while paused.
+ */
+function GameLoop({ running, timeScale }: { running: boolean; timeScale: number }) {
+  const acc = useRef(0)
+  useFrame((_, dt) => {
+    if (!running) {
+      acc.current = 0
+      return
+    }
+    // A long frame (tab in the background) is not caught up: at most a tenth of a second.
+    acc.current += Math.min(dt, 0.1) * timeScale
+    while (acc.current >= PHYSICS.timeStep) {
+      stepGame(PHYSICS.timeStep)
+      acc.current -= PHYSICS.timeStep
+    }
+  })
   useEffect(() => {
     resetForServe()
     return useGame.subscribe((s, prev) => {
@@ -135,12 +143,10 @@ export function Scene() {
   const dpr = Math.min(window.devicePixelRatio || 1, preset.dprMax)
   const shadowSize = preset.shadow
   const timeScale = useLab((s) => (LAB_ENABLED ? s.timeScale : 1))
-  const colliders = useLab((s) => LAB_ENABLED && s.colliders)
   const mode = useGame((s) => s.mode)
   // An online match keeps running behind the pause menu: the opponent does not stop.
   const running = screen === 'playing' || (mode === 'online' && screen === 'paused')
   const fpsCap = useGame((s) => Number(s.fps))
-  const slow = running && timeScale < 1
 
   return (
     <Canvas
@@ -160,22 +166,13 @@ export function Scene() {
       {/* Menus only show a slow orbit behind the panels: 20 fps is plenty and keeps the GPU cool. */}
       <FrameLimiter fps={running ? fpsCap : 20} />
       <Lighting key={`${shadowSize}-${surface}`} shadowSize={shadowSize} indoor={surface === 'hard'} />
+      <GameLoop running={running} timeScale={timeScale} />
+      <ServeAnchor />
       <Suspense fallback={null}>
-        <Physics
-          gravity={[0, PHYSICS.gravity, 0]}
-          timeStep={PHYSICS.timeStep}
-          paused={!running || slow}
-          interpolate={false}
-          debug={colliders}
-        >
-          {slow ? <SlowStepper scale={timeScale} /> : null}
-          <GameLoop />
-          <ServeAnchor />
-          <Court />
-          <Net />
-          <Ball />
-        </Physics>
+        <Court />
       </Suspense>
+      <Net />
+      <Ball />
       <Players skin={skin} />
       {/* One small, closed venue per surface: nothing outside it needs drawing. */}
       {surface === 'hard' ? (

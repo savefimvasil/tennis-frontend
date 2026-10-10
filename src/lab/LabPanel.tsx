@@ -88,7 +88,6 @@ export default function LabPanel() {
   useControls('View', {
     trajectory: { value: useLab.getState().trajectory, onChange: (v: boolean) => useLab.setState({ trajectory: v }) },
     forces: { value: useLab.getState().forces, onChange: (v: boolean) => useLab.setState({ forces: v }) },
-    colliders: { value: useLab.getState().colliders, onChange: (v: boolean) => useLab.setState({ colliders: v }) },
     perf: { value: useLab.getState().perf, onChange: (v: boolean) => useLab.setState({ perf: v }) },
     'time scale': {
       value: 1,
