@@ -5,6 +5,7 @@ import { COURT } from '../game/constants'
 import { sim } from '../game/sim'
 import { useGame } from '../game/store'
 
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)')
 const pos = new THREE.Vector3()
 const look = new THREE.Vector3()
 
@@ -59,7 +60,8 @@ export function CameraRig() {
     camera.position.lerp(pos, k)
     c.look.lerp(look, k)
 
-    // Hit shake, decaying quickly.
+    // Hit shake, decaying quickly (none for players who ask for reduced motion).
+    if (reducedMotion.matches) sim.shake = 0
     if (sim.shake > 0.001) {
       const s = sim.shake * 0.05
       camera.position.x += (Math.random() - 0.5) * s

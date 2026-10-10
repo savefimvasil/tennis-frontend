@@ -1,13 +1,31 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AI, halfSign, other } from '../game/constants'
+import { AI, HUMAN, halfSign, other } from '../game/constants'
 import { serverXSign } from '../game/shot'
 import { inServiceBox, inSinglesCourt } from '../physics/flight'
 import { sim } from '../game/sim'
 import { useGame } from '../game/store'
 import { playApplause, playBounce, playFence, playGroan, playHit, playNet } from '../audio/sound'
 import { radialTexture } from './textures'
+
+/** The player's own strikes buzz the pad (or the phone), harder for harder hits. */
+function rumble(power: number) {
+  const pads = navigator.getGamepads?.() ?? []
+  for (const pad of pads) {
+    const act = (
+      pad as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, p: object) => Promise<unknown> } }) | null
+    )?.vibrationActuator
+    act
+      ?.playEffect?.('dual-rumble', {
+        duration: 40 + power * 50,
+        strongMagnitude: 0.25 + power * 0.6,
+        weakMagnitude: 0.5,
+      })
+      ?.catch(() => {})
+  }
+  if (matchMedia('(pointer: coarse)').matches) navigator.vibrate?.(Math.round(12 + power * 18))
+}
 
 /** Soft contact shadow under the ball: the low sun casts the real one far away. */
 function BallBlob() {
@@ -89,7 +107,10 @@ function EventFx() {
     for (const e of sim.events) {
       if (e.id <= seen.current) continue
       seen.current = e.id
-      if (e.kind === 'hit') playHit(e.power, e.x, e.z)
+      if (e.kind === 'hit') {
+        playHit(e.power, e.x, e.z)
+        if (sim.lastHitter === HUMAN) rumble(e.power)
+      }
       if (e.kind === 'net') playNet()
       if (e.kind === 'fence') playFence()
       if (e.kind === 'bounce') {
