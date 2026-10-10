@@ -18,3 +18,13 @@ WebP by `tools/textures/fetch.mjs` (see `tools/textures/README.md`).
 | Lonely Road Afternoon (Pure Sky) (2k HDRI) | Poly Haven | Dimitrios Savva, Jarod Guest | <https://polyhaven.com/a/lonely_road_afternoon_puresky> | CC0 1.0 |
 
 Licence pages: <https://polyhaven.com/license>, <https://docs.ambientcg.com/license/>.
+
+## trees/
+
+| Asset | Source | Licence |
+| --- | --- | --- |
+| `bark-oak*` | Poly Haven `bark_brown_02`, via EZ-Tree | CC0 1.0 |
+| `bark-pine*` | TextureCan #588, via EZ-Tree | CC0 1.0 |
+| `leaves-*` | EZ-Tree 1.1.0 (https://github.com/dgreenheck/ez-tree), Copyright (c) 2024 Daniel Greenheck | MIT |
+
+Converted to 512 px WebP by `tools/trees/run.mjs`.

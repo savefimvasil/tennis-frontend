@@ -32,6 +32,18 @@ function memo<T extends THREE.Texture>(key: string, make: () => T): T {
 }
 
 // Small deterministic PRNG so every load looks the same.
+/** A canvas drawn once into an sRGB texture. */
+export function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  draw(c.getContext('2d')!)
+  const t = new THREE.CanvasTexture(c)
+  t.colorSpace = THREE.SRGBColorSpace
+  t.anisotropy = 8
+  return t
+}
+
 export function rng(seed: number) {
   let s = seed >>> 0
   return () => {

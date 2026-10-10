@@ -7,7 +7,7 @@ camera only ever sees the inside of the enclosure, the sky and a few tree tops.
 
 | Surface | Venue | File |
 | --- | --- | --- |
-| Hard | Indoor hall under a timber gridshell: a diagonal glulam lattice over a white membrane that glows with daylight, a wood-panelled wall with a band of windows onto trees, arched end walls of translucent panels between timber mullions. The light comes from high above, so the lattice casts its diamond shadow pattern onto the court. | `src/scene/Hall.tsx` |
+| Hard | Indoor hall under a timber gridshell: a diagonal glulam lattice over a white membrane that glows with daylight, a wood-panelled wall with a band of open windows onto a lawn and trees, arched end walls of translucent panels between timber mullions. The light comes from high above, so the lattice casts its diamond shadow pattern onto the court. | `src/scene/Hall.tsx` |
 | Grass | Garden court: club fence and windscreen, a lawn, a tall clipped hedge, a white weatherboard pavilion with a green gable roof and clock, broadleaf trees and umbrella pines over the hedge. | `src/scene/OutdoorVenues.tsx` |
 | Clay | Mediterranean courtyard: club fence and windscreen, ochre stucco walls with arches and terracotta coping, bougainvillea spilling over them, cypresses and umbrella pines beyond. | `src/scene/OutdoorVenues.tsx` |
 
@@ -19,6 +19,14 @@ paving, grass, the courts) and procedural PBR sets for the rest (`proceduralMate
 glulam with laminations, glue lines and growth rings; oak or painted planks; the woven
 membrane. Each comes with colour, normal and roughness maps, generated once at load.
 Ambient occlusion now runs on Medium as well as High.
+
+**Trees.** Real trees from EZ-Tree (MIT), baked by `tools/trees` into one GLB of six
+variants: branches with photo bark and photo leaf cards whose normals bend out from the
+crown centre, so each crown shades as one volume. The hall sees them through its open
+windows, the garden over its hedge (oaks, ash, pines), the courtyard over its walls
+(cypresses, stone pines). They are instanced (two draw calls per variant), cast no shadows,
+and drop back to the primitive crowns on Low. The courtyard's bougainvillea is hanging spray
+cards (a procedural canvas of leaves and magenta bracts) instead of balls.
 
 The sections below describe the earlier outdoor stadium venue (removed; it is in the git
 history) and stay for reference.

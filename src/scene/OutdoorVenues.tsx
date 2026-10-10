@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { COURT } from '../game/constants'
-import { facadeTexture, hedgeTexture, rng } from './textures'
-import { ClubFence, PlayerBenches, SpectatorBench, TreeClump, treeBand } from './VenueParts'
+import { canvasTexture, facadeTexture, hedgeTexture, rng } from './textures'
+import { ClubFence, PlayerBenches, SpectatorBench, treeBand } from './VenueParts'
+import { Trees } from './Trees'
 import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { planks, repeated } from './proceduralMaterials'
 
@@ -139,8 +140,8 @@ export function GardenCourt({ detail }: { detail: Detail }) {
         {(len) => <Hedge len={len} />}
       </Ring>
       <Pavilion />
-      <TreeClump kind="round" spots={trees} />
-      <TreeClump kind="pine" spots={pines} seed={8} />
+      <Trees kind="round" spots={trees} />
+      <Trees kind="conifer" spots={pines} seed={8} />
       <PlayerBenches color="#2f4d3a" />
       <SpectatorBench count={detail === 'low' ? 6 : 10} wood="#e9e4d8" />
     </group>
@@ -181,27 +182,100 @@ function StuccoWall({ len }: { len: number }) {
   )
 }
 
-/** Bougainvillea spilling over the tops of the walls: magenta clumps, one instanced mesh. */
+/**
+ * A bougainvillea spray on a transparent card: a wiry stem, green leaves along it and
+ * papery magenta bracts in clusters of three toward the tips.
+ */
+function sprayTexture() {
+  return canvasTexture(256, 256, (g) => {
+    const r = rng(91)
+    g.clearRect(0, 0, 256, 256)
+    const stems: [number, number][][] = []
+    for (let k = 0; k < 5; k++) {
+      // Stems droop from the top edge (the card hangs from the coping).
+      const pts: [number, number][] = []
+      let x = 60 + r() * 136
+      let y = 0
+      let dx = (r() - 0.5) * 2
+      for (let i = 0; i < 12; i++) {
+        pts.push([x, y])
+        dx += (r() - 0.5) * 1.2
+        x += dx * 6
+        y += 16 + r() * 6
+      }
+      stems.push(pts)
+      g.strokeStyle = '#4a3a22'
+      g.lineWidth = 2
+      g.beginPath()
+      pts.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py)))
+      g.stroke()
+    }
+    const blob = (x: number, y: number, rx: number, ry: number, a: number, col: string) => {
+      g.fillStyle = col
+      g.beginPath()
+      g.ellipse(x, y, rx, ry, a, 0, Math.PI * 2)
+      g.fill()
+    }
+    for (const pts of stems)
+      pts.forEach(([x, y], i) => {
+        // Leaves all along, bracts thicker toward the lower (outer) end.
+        for (let k = 0; k < 2; k++) {
+          const a = r() * Math.PI * 2
+          const l = 0.6 + r() * 0.5
+          blob(
+            x + Math.cos(a) * 12,
+            y + Math.sin(a) * 12,
+            11 * l,
+            6 * l,
+            a,
+            `hsl(${95 + r() * 25}, ${35 + r() * 20}%, ${22 + r() * 14}%)`,
+          )
+        }
+        if (i > 2 && r() < 0.35 + i * 0.06)
+          for (let c = 0; c < 2 + Math.floor(r() * 3); c++) {
+            const cx = x + (r() - 0.5) * 40
+            const cy = y + (r() - 0.5) * 30
+            const hue = 318 + r() * 18
+            for (let p = 0; p < 3; p++) {
+              const a = (p / 3) * Math.PI * 2 + r()
+              blob(
+                cx + Math.cos(a) * 5,
+                cy + Math.sin(a) * 5,
+                7,
+                5,
+                a,
+                `hsl(${hue}, ${70 + r() * 15}%, ${42 + r() * 16}%)`,
+              )
+            }
+            blob(cx, cy, 2, 2, 0, '#f4ecc8')
+          }
+      })
+  })
+}
+
+/** Bougainvillea spilling over the tops of the walls: hanging spray cards, one instanced mesh. */
 function Bougainvillea({ count }: { count: number }) {
   const mesh = useRef<THREE.InstancedMesh>(null!)
   const spots = useMemo(() => {
     const r = rng(77)
     const ax = FX + 4
     const az = FZ + 4
-    const out: [number, number, number, number][] = []
-    // Climbers in clumps: each one many small rounded masses spilling down from the coping.
-    const clumps = Math.max(6, Math.round(count / 32))
+    const out: { x: number; y: number; z: number; s: number; alongZ: boolean }[] = []
+    // Climbers in clumps: overlapping sprays hanging from the coping, longer in the middle.
+    const clumps = Math.max(6, Math.round(count / 22))
     for (let c = 0; c < clumps && out.length < count; c++) {
       const side = Math.floor(r() * 4)
       const along = (r() * 2 - 1) * (side < 2 ? ax - 2 : az - 2)
-      const drop = 1 + r() * 2
-      for (let k = 0; k < 32 && out.length < count; k++) {
-        const a = along + (r() - 0.5) * 1.8
-        const y = WALL_H - 0.15 - Math.pow(r(), 1.3) * drop
-        const inward = 0.34 + r() * 0.08
+      const width = 1.6 + r() * 1.6
+      for (let k = 0; k < 22 && out.length < count; k++) {
+        const t = r() * 2 - 1
+        const a = along + t * width
+        const s = (1.0 + r() * 0.8) * (1.3 - Math.abs(t) * 0.6)
+        const y = WALL_H + 0.1 - s / 2 - r() * 0.5 * (1 - Math.abs(t))
+        const inward = 0.32 + r() * 0.08
         const x = side < 2 ? a : side === 2 ? ax - inward : -ax + inward
         const z = side < 2 ? (side === 0 ? -az + inward : az - inward) : a
-        out.push([x, y, z, 0.24 + r() * 0.2])
+        out.push({ x, y, z, s, alongZ: side >= 2 })
       }
     }
     return out
@@ -209,28 +283,27 @@ function Bougainvillea({ count }: { count: number }) {
   useLayoutEffect(() => {
     const c = new THREE.Color()
     const r = rng(78)
-    spots.forEach(([x, y, z, s], i) => {
+    spots.forEach(({ x, y, z, s, alongZ }, i) => {
       dummy.position.set(x, y, z)
-      // Flat against the wall face (the wall runs along x on the ends, along z on the sides).
-      const alongZ = Math.abs(Math.abs(x) - (FX + 4)) < 1
-      dummy.rotation.set(0, alongZ ? Math.PI / 2 : 0, (r() - 0.5) * 0.6)
-      dummy.scale.set(s * 1.3, s, s * 0.7)
+      // Nearly flat against the wall face, leaning out a little at the bottom.
+      dummy.rotation.set(0, alongZ ? Math.PI / 2 : 0, 0)
+      dummy.rotateZ((r() - 0.5) * 0.5)
+      dummy.rotateX((r() - 0.5) * 0.3)
+      dummy.scale.set(s * (r() < 0.5 ? -1 : 1), s, s)
       dummy.updateMatrix()
       mesh.current.setMatrixAt(i, dummy.matrix)
-      // Mostly magenta bracts, some leafy green clumps among them.
-      if (r() < 0.4) c.setHSL(0.26 + r() * 0.05, 0.45, 0.24 + r() * 0.08)
-      else c.setHSL(0.89 + r() * 0.04, 0.62, 0.45 + r() * 0.1)
-      mesh.current.setColorAt(i, c)
+      mesh.current.setColorAt(i, c.setScalar(0.85 + r() * 0.2))
     })
     mesh.current.instanceMatrix.needsUpdate = true
     mesh.current.instanceColor!.needsUpdate = true
     mesh.current.computeBoundingSphere()
   }, [spots])
-  const geo = useMemo(() => new THREE.IcosahedronGeometry(0.5, 1), [])
-  useEffect(() => () => geo.dispose(), [geo])
+  const map = useMemo(() => sprayTexture(), [])
+  useEffect(() => () => map.dispose(), [map])
   return (
-    <instancedMesh ref={mesh} args={[geo, undefined, spots.length]}>
-      <meshStandardMaterial roughness={0.9} />
+    <instancedMesh ref={mesh} args={[undefined, undefined, spots.length]}>
+      <planeGeometry args={[1, 1]} />
+      <meshStandardMaterial map={map} alphaTest={0.5} side={THREE.DoubleSide} roughness={0.8} />
     </instancedMesh>
   )
 }
@@ -246,9 +319,9 @@ export function CourtyardCourt({ detail }: { detail: Detail }) {
       <Ring gap={4} height={WALL_H} thickness={0.6}>
         {(len) => <StuccoWall len={len} />}
       </Ring>
-      <Bougainvillea count={detail === 'low' ? 320 : 700} />
-      <TreeClump kind="cypress" spots={cypresses} />
-      <TreeClump kind="pine" spots={pines} seed={9} />
+      <Bougainvillea count={detail === 'low' ? 200 : 440} />
+      <Trees kind="cypress" spots={cypresses} />
+      <Trees kind="pine" spots={pines} seed={9} />
       <PlayerBenches color="#8a3b2a" />
       <SpectatorBench count={detail === 'low' ? 6 : 10} wood="#b98a5c" />
     </group>

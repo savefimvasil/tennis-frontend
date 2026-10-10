@@ -1,12 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { COURT } from '../game/constants'
-import { rng } from './textures'
-import { PlayerBenches, SpectatorBench } from './VenueParts'
+import { PlayerBenches, SpectatorBench, treeBand } from './VenueParts'
+import { Trees } from './Trees'
+import { PbrMaterial, WithFallback } from './PbrMaterial'
 import { glulam, membrane, planks as plankSet, repeated } from './proceduralMaterials'
 
 // An indoor court under a timber gridshell: glulam lattice over a white membrane that lets
-// the daylight through, a low wall of wood panels with a band of windows onto the trees, and
+// the daylight through, a low wall of wood panels with a band of open windows onto a lawn and real trees, and
 // arched end walls of translucent panels between timber mullions. Everything the camera can
 // see is inside: no outdoor world to draw.
 
@@ -30,55 +31,6 @@ function vaultPoint(s: number, z: number, inset = 0, out = new THREE.Vector3()) 
   const phi = s / R
   const r = R - inset
   return out.set(r * Math.sin(phi), CY + r * Math.cos(phi), z)
-}
-
-// ------------------------------------------------------------------ textures
-
-function canvasTexture(w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  draw(c.getContext('2d')!)
-  const t = new THREE.CanvasTexture(c)
-  t.colorSpace = THREE.SRGBColorSpace
-  t.anisotropy = 8
-  return t
-}
-
-/** Daylight view through the windows: sky over a soft wall of trees and a strip of lawn. */
-function viewTexture(seed: number) {
-  const t = canvasTexture(1024, 256, (g) => {
-    const sky = g.createLinearGradient(0, 0, 0, 256)
-    sky.addColorStop(0, '#dfeefa')
-    sky.addColorStop(0.55, '#f3f6f0')
-    sky.addColorStop(1, '#e8efe1')
-    g.fillStyle = sky
-    g.fillRect(0, 0, 1024, 256)
-    const r = rng(seed)
-    // Three depths of foliage: pale and hazy far, dark and crisp near.
-    const layers = [
-      { y: 120, size: 34, n: 70, col: [104, 132, 104], a: 0.85 },
-      { y: 150, size: 46, n: 60, col: [62, 98, 58], a: 0.95 },
-      { y: 185, size: 58, n: 50, col: [38, 70, 36], a: 1 },
-    ]
-    for (const L of layers) {
-      for (let i = 0; i < L.n; i++) {
-        const x = r() * 1024
-        const y = L.y + (r() - 0.5) * 40
-        const s = L.size * (0.6 + r() * 0.7)
-        const k = 0.85 + r() * 0.3
-        g.fillStyle = `rgba(${L.col[0] * k}, ${L.col[1] * k}, ${L.col[2] * k}, ${L.a})`
-        g.beginPath()
-        g.ellipse(x, y, s * 0.7, s, 0, 0, Math.PI * 2)
-        g.fill()
-        g.fillRect(x - s * 0.7, y, s * 1.4, 256)
-      }
-    }
-    g.fillStyle = '#5f8a3f'
-    g.fillRect(0, 232, 1024, 24)
-  })
-  t.wrapS = THREE.RepeatWrapping
-  return t
 }
 
 // ------------------------------------------------------------------ vault
@@ -211,22 +163,13 @@ function WallRun({
   length,
   position,
   rotationY,
-  view,
 }: {
   length: number
   position: [number, number, number]
   rotationY: number
-  view: THREE.Texture
 }) {
   const oak = useMemo(() => repeated(plankSet(8), length / 1.1, 1), [length])
   const beam = useMemo(() => repeated(glulam(4), length / 3, 1), [length])
-  const viewMap = useMemo(() => {
-    const t = view.clone()
-    t.repeat.set(length / 26, 1)
-    t.offset.x = position[0] * 0.037 + position[2] * 0.011
-    t.needsUpdate = true
-    return t
-  }, [view, length, position])
   const mullions = useRef<THREE.InstancedMesh>(null!)
   const count = Math.floor(length / 1.8) + 1
   useLayoutEffect(() => {
@@ -249,11 +192,6 @@ function WallRun({
       <mesh position={[0, PANEL_H, 0.08]}>
         <boxGeometry args={[length, 0.06, 0.18]} />
         <meshStandardMaterial color="#c9c9c4" metalness={0.5} roughness={0.4} />
-      </mesh>
-      {/* The view outside: unlit, it is daylight. */}
-      <mesh position-y={(PANEL_H + WINDOW_TOP) / 2}>
-        <planeGeometry args={[length, WINDOW_TOP - PANEL_H]} />
-        <meshBasicMaterial map={viewMap} />
       </mesh>
       <instancedMesh ref={mullions} args={[undefined, undefined, count]}>
         <boxGeometry args={[0.08, WINDOW_TOP - PANEL_H, 0.1]} />
@@ -324,15 +262,24 @@ function EndWall({ z }: { z: number }) {
 // ------------------------------------------------------------------ hall
 
 export function Hall({ detail }: { detail: 'high' | 'medium' | 'low' }) {
-  const view = useMemo(() => viewTexture(5), [])
-  useEffect(() => () => view.dispose(), [view])
+  const trees = useMemo(() => treeBand(51, detail === 'low' ? 10 : 14, 2.5, 12, [6, 9]), [detail])
+  const conifers = useMemo(() => treeBand(52, detail === 'low' ? 3 : 4, 10, 20, [11, 15]), [detail])
   return (
     <group>
       <Vault />
-      <WallRun length={WZ * 2} position={[WX, 0, 0]} rotationY={-Math.PI / 2} view={view} />
-      <WallRun length={WZ * 2} position={[-WX, 0, 0]} rotationY={Math.PI / 2} view={view} />
-      <WallRun length={WX * 2} position={[0, 0, -WZ]} rotationY={0} view={view} />
-      <WallRun length={WX * 2} position={[0, 0, WZ]} rotationY={Math.PI} view={view} />
+      <WallRun length={WZ * 2} position={[WX, 0, 0]} rotationY={-Math.PI / 2} />
+      <WallRun length={WZ * 2} position={[-WX, 0, 0]} rotationY={Math.PI / 2} />
+      <WallRun length={WX * 2} position={[0, 0, -WZ]} rotationY={0} />
+      <WallRun length={WX * 2} position={[0, 0, WZ]} rotationY={Math.PI} />
+      {/* Outside the windows: a lawn and a ring of trees under the real sky. */}
+      <mesh rotation-x={-Math.PI / 2} position-y={-0.03}>
+        <planeGeometry args={[(WX + 24) * 2, (WZ + 24) * 2]} />
+        <WithFallback fallback={<meshStandardMaterial color="#6f9a4c" roughness={1} />}>
+          <PbrMaterial set="court/grass" repeat={[(WX + 24) / 1.1, (WZ + 24) / 1.1]} color="#7aa357" roughness={1} />
+        </WithFallback>
+      </mesh>
+      <Trees kind="round" spots={trees} seed={5} />
+      <Trees kind="conifer" spots={conifers} seed={6} />
       <EndWall z={-WZ} />
       <EndWall z={WZ} />
       <PlayerBenches />
