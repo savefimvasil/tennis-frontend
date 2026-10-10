@@ -16,11 +16,18 @@ const SHOTS: { shot: ShotType; label: string; serve: string }[] = [
 
 const RADIUS = 56
 
+/** A touch-first device: a coarse pointer, or touch with no hover (some browsers report neither well). */
+function isTouch() {
+  return (
+    matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches)
+  )
+}
+
 export function useTouchDevice() {
-  const [touch, setTouch] = useState(() => matchMedia('(pointer: coarse)').matches)
+  const [touch, setTouch] = useState(isTouch)
   useEffect(() => {
     const m = matchMedia('(pointer: coarse)')
-    const on = () => setTouch(m.matches)
+    const on = () => setTouch(isTouch())
     m.addEventListener('change', on)
     document.documentElement.classList.toggle('touch', touch)
     return () => m.removeEventListener('change', on)

@@ -270,16 +270,20 @@ const PANEL_TOP = 140
 function placeBesidePlayer(panel: HTMLDivElement) {
   const a = hudLive.serveAnchor
   if (!a.ok || panel.dataset.stage === 'off') return
+  // A compact HUD zooms the panel (CSS zoom): its translate is in zoomed pixels, so work in those.
+  const z = parseFloat(getComputedStyle(panel).zoom) || 1
   const w = panel.offsetWidth
   const h = panel.offsetHeight
-  const vw = window.innerWidth
-  const vh = window.innerHeight
+  const vw = window.innerWidth / z
+  const vh = window.innerHeight / z
   // On touch screens the shot buttons own the bottom-right corner.
-  const right = vw - PANEL_MARGIN - (document.documentElement.classList.contains('touch') ? 190 : 0)
-  let x = a.x + PANEL_GAP
-  if (x + w > right) x = a.x - PANEL_GAP - w
+  const right = vw - PANEL_MARGIN - (document.documentElement.classList.contains('touch') ? 150 / z : 0)
+  const ax = a.x / z
+  const ay = a.y / z
+  let x = ax + PANEL_GAP
+  if (x + w > right) x = ax - PANEL_GAP - w
   x = Math.max(PANEL_MARGIN, Math.min(right - w, x))
-  const y = Math.max(PANEL_TOP, Math.min(vh - PANEL_MARGIN - h, a.y - h / 2))
+  const y = Math.max(PANEL_TOP * z, Math.min(vh - PANEL_MARGIN - h, ay - h / 2))
   const t = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`
   if (panel.style.transform !== t) panel.style.transform = t
 }

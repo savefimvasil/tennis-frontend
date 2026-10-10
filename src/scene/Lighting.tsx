@@ -79,8 +79,8 @@ function EveningHall({ shadowSize }: { shadowSize: number }) {
         position={LAMPS_DIR.clone().multiplyScalar(70).toArray()}
         intensity={1.5}
         color="#fff3e2"
-        castShadow
-        shadow-mapSize={[shadowSize, shadowSize]}
+        castShadow={shadowSize > 0}
+        shadow-mapSize={[Math.max(shadowSize, 256), Math.max(shadowSize, 256)]}
         shadow-bias={-0.0002}
         shadow-normalBias={0.03}
         shadow-radius={4}
@@ -157,8 +157,8 @@ function Daylight({ shadowSize }: { shadowSize: number }) {
         position={sunPos.toArray()}
         intensity={3.6}
         color="#ffd2a0"
-        castShadow
-        shadow-mapSize={[shadowSize, shadowSize]}
+        castShadow={shadowSize > 0}
+        shadow-mapSize={[Math.max(shadowSize, 256), Math.max(shadowSize, 256)]}
         shadow-bias={-0.0002}
         shadow-normalBias={0.03}
       />

@@ -1885,49 +1885,42 @@ button:disabled {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Compact hints on touch screens: the play area is small. */
-.touch .serve-panel {
-  transform-origin: top left;
-  font-size: 12px;
-  padding: 8px 10px;
-  min-width: 0;
-  width: 220px;
-}
-.touch .serve-call {
-  font-size: 16px;
-}
-.touch .telemetry {
-  display: none;
-}
-.touch .coach {
-  width: min(300px, calc(100vw - 32px));
-  padding: 8px 12px 10px;
-}
-.touch .coach b {
-  font-size: 16px;
-}
-.touch .coach p {
-  font-size: 12px;
-}
-.touch .serve-speed b {
-  font-size: 24px;
-}
-.touch .review b {
-  font-size: 22px;
-}
-.touch .touch-stick-hint {
-  display: none;
-}
 /* Blurring what is behind a panel is re-rendered every frame: too costly on a phone's GPU. */
 .touch * {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
-.touch .scoreboard {
-  transform: scale(0.72);
-  transform-origin: top left;
-}
-.touch .hud-right {
-  transform: scale(0.8);
-  transform-origin: top right;
+
+/* ---------------------------------------------------------------- compact HUD (phones) */
+
+/*
+ * Small viewports (a phone in landscape is ~400 px tall) get the HUD at about 60%, and lose
+ * what they can do without: the wind/speed panel, the key hints, the stick hint.
+ */
+@media (max-height: 540px), (max-width: 720px) {
+  .scoreboard,
+  .toast-anchor,
+  .rally,
+  .coach,
+  .serve-speed-anchor,
+  .review,
+  .grade-anchor,
+  .serve-panel {
+    zoom: 0.6;
+  }
+  .hud-right,
+  .touch-shots {
+    zoom: 0.7;
+  }
+  .telemetry,
+  .dock,
+  .touch-stick-hint,
+  .serve-keys,
+  .serve-hint {
+    display: none !important;
+  }
+  * {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 }

@@ -1,5 +1,8 @@
 import { Bloom, EffectComposer, LUT, N8AO, ToneMapping, Vignette } from '@react-three/postprocessing'
 import { ToneMappingMode } from 'postprocessing'
+import { useEffect } from 'react'
+import { useThree } from '@react-three/fiber'
+import * as THREE from 'three'
 import type { Quality } from '../game/store'
 import type { SurfaceId } from '../physics/flight'
 import { gradeLut } from './grade'
@@ -36,11 +39,20 @@ export function Effects({ quality, surface }: { quality: Quality; surface: Surfa
       </EffectComposer>
     )
   }
-  return (
-    <EffectComposer multisampling={0}>
-      <ToneMapping mode={ToneMappingMode.AGX} />
-      <LUT lut={lut} />
-      <Vignette offset={0.28} darkness={0.4} />
-    </EffectComposer>
-  )
+  // Low (phones): no composer at all. The scene renders straight to the screen with three's own
+  // AgX tone mapping and the canvas's MSAA: no full-screen passes, no extra render target.
+  return <DirectTone />
+}
+
+/** Tone mapping in the materials themselves, for rendering without a composer. */
+function DirectTone() {
+  const gl = useThree((st) => st.gl)
+  useEffect(() => {
+    gl.toneMapping = THREE.AgXToneMapping
+    gl.toneMappingExposure = 1
+    return () => {
+      gl.toneMapping = THREE.NoToneMapping
+    }
+  }, [gl])
+  return null
 }

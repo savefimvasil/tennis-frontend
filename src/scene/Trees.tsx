@@ -62,7 +62,13 @@ function material(name: string, tex: Tex) {
   } else {
     const map = tex[`leaves-${type}` as keyof Tex]
     map.colorSpace = THREE.SRGBColorSpace
-    m = new THREE.MeshStandardMaterial({ map, alphaTest: 0.5, alphaToCoverage: true, side: THREE.DoubleSide, roughness: 0.85 })
+    m = new THREE.MeshStandardMaterial({
+      map,
+      alphaTest: 0.5,
+      alphaToCoverage: true,
+      side: THREE.DoubleSide,
+      roughness: 0.85,
+    })
   }
   materials.set(name, m)
   return m
@@ -144,7 +150,7 @@ function RealTrees({ kind, spots, seed, dim }: { kind: RealTreeKind; spots: Tree
   )
 }
 
-/** A band of real trees, with primitive crowns while they load (and on Low quality). */
+/** A band of real trees, with primitive crowns while they load. */
 export function Trees({
   kind,
   spots,
@@ -157,11 +163,12 @@ export function Trees({
   /** Darkens the trees (e.g. outside at dusk, where the scene's lights do not reach). */
   dim?: number
 }) {
+  // Low keeps real trees (the primitive crowns read as odd green blobs), half as many.
   const low = useGame((s) => s.quality === 'low')
-  if (low) return <TreeClump kind={FALLBACK[kind]} spots={spots} seed={seed} />
+  const shown = useMemo(() => (low ? spots.filter((_, i) => i % 2 === 0) : spots), [low, spots])
   return (
-    <WithFallback fallback={<TreeClump kind={FALLBACK[kind]} spots={spots} seed={seed} />}>
-      <RealTrees kind={kind} spots={spots} seed={seed} dim={dim} />
+    <WithFallback fallback={<TreeClump kind={FALLBACK[kind]} spots={shown} seed={seed} />}>
+      <RealTrees kind={kind} spots={shown} seed={seed} dim={dim} />
     </WithFallback>
   )
 }

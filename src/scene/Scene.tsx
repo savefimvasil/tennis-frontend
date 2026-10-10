@@ -103,7 +103,8 @@ function GameLoop({ running, timeScale }: { running: boolean; timeScale: number 
 const PRESETS = {
   high: { dprMax: 1.5, shadow: 2048 },
   medium: { dprMax: 1.25, shadow: 1024 },
-  low: { dprMax: 1, shadow: 512 },
+  // Phones: no shadow map (soft blob shadows stay), no post-processing, hardware MSAA instead.
+  low: { dprMax: 1, shadow: 0 },
 } as const
 
 /**
@@ -151,13 +152,20 @@ export function Scene() {
 
   return (
     <Canvas
-      shadows="percentage"
+      shadows={quality === 'low' ? false : 'percentage'}
       dpr={dpr}
       flat
       // Behind the menus nothing is drawn at all (not even a first frame: compiling every shader
       // for it is what made the first clicks wait); a picture of the venue stands in.
       frameloop={screen === 'menu' || screen === 'online' ? 'never' : 'demand'}
-      gl={{ antialias: false, powerPreference: 'default', stencil: false }}
+      // Low renders straight to the screen, so the canvas's own MSAA does the anti-aliasing
+      // (nearly free on phone GPUs); the other levels anti-alias in the composer instead.
+      key={quality === 'low' ? 'direct' : 'composer'}
+      gl={{
+        antialias: quality === 'low',
+        powerPreference: quality === 'low' ? 'low-power' : 'default',
+        stencil: false,
+      }}
       camera={{ fov: 50, near: 0.1, far: 200, position: [0, 6, 16] }}
       onCreated={(state) => {
         // three.js checks every new shader synchronously, stalling the GPU pipeline; dev only.
