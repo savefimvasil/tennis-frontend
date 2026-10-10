@@ -92,56 +92,57 @@ const qb = new THREE.Quaternion()
 const qParent = new THREE.Quaternion()
 const vLift = new THREE.Vector3()
 
-/** Repaints the avatar's blue top in another colour, keeping the cloth shading. */
-export function recolourShirt(src: THREE.Texture, hex: string): THREE.Texture {
-  const img = src.image as HTMLImageElement
-  const canvas = document.createElement('canvas')
-  canvas.width = img.width
-  canvas.height = img.height
-  const g = canvas.getContext('2d')!
-  g.drawImage(img, 0, 0)
-  const data = g.getImageData(0, 0, canvas.width, canvas.height)
-  const d = data.data
-  const c = new THREE.Color(hex)
-  const tr = c.r * 255
-  const tg = c.g * 255
-  const tb = c.b * 255
-  for (let i = 0; i < d.length; i += 4) {
-    const r = d[i]
-    const gg = d[i + 1]
-    const b = d[i + 2]
-    const mx = Math.max(r, gg, b)
-    const mn = Math.min(r, gg, b)
-    if (b > r * 1.25 && b > gg * 1.1 && (mx - mn) / (mx + 1) > 0.25) {
-      const k = Math.min(1.15, (mx / 255) * 1.9)
-      d[i] = Math.min(255, tr * k)
-      d[i + 1] = Math.min(255, tg * k)
-      d[i + 2] = Math.min(255, tb * k)
-    }
+/**
+ * The athletes' material tweaks, in the shader (no extra pass, no CPU work):
+ * - the shirt colour: the texture's blue top is repainted on the GPU, keeping the cloth
+ *   shading (the same test and gain the old per-pixel canvas repaint used, which took
+ *   tens of milliseconds and a 1024 px texture per colour);
+ * - a soft warm rim: grazing edges pick up a little of their own colour, reddened, the way
+ *   skin and cloth glow where light passes through at the silhouette.
+ */
+export function athleteMaterial(m: THREE.MeshStandardMaterial, rim: number, shirt: string | null = null) {
+  const u = { uShirt: { value: new THREE.Vector3() }, uShirtOn: { value: 0 } }
+  m.userData.shirtUniforms = u
+  setShirt(m, shirt)
+  m.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, u)
+    shader.fragmentShader = shader.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uShirt;\nuniform float uShirtOn;')
+      .replace(
+        '#include <map_fragment>',
+        `#include <map_fragment>
+        if (uShirtOn > 0.5) {
+          vec3 s = pow(max(diffuseColor.rgb, vec3(0.0)), vec3(1.0 / 2.2));
+          float mx = max(s.r, max(s.g, s.b));
+          float mn = min(s.r, min(s.g, s.b));
+          if (s.b > s.r * 1.25 && s.b > s.g * 1.1 && (mx - mn) / (mx + 0.004) > 0.25) {
+            float k = min(1.15, mx * 1.9);
+            diffuseColor.rgb = pow(min(uShirt * k, vec3(1.0)), vec3(2.2));
+          }
+        }`,
+      )
+      .replace(
+        '#include <opaque_fragment>',
+        `float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
+        outgoingLight += diffuseColor.rgb * vec3(1.0, 0.55, 0.42) * rim * ${rim.toFixed(2)};
+        #include <opaque_fragment>`,
+      )
   }
-  g.putImageData(data, 0, 0)
-  const t = new THREE.CanvasTexture(canvas)
-  t.colorSpace = THREE.SRGBColorSpace
-  t.anisotropy = 8
-  return t
+  m.customProgramCacheKey = () => `athlete-${rim}`
+  return m
 }
 
-/**
- * Adds a soft warm rim to a standard material: grazing edges pick up a little of their own
- * colour, reddened, the way skin and cloth glow where light passes through at the silhouette.
- * Two lines of shader, no extra pass.
- */
-function withRim(m: THREE.MeshStandardMaterial, strength: number) {
-  m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <opaque_fragment>',
-      `float rim = pow(1.0 - saturate(dot(normal, normalize(vViewPosition))), 3.0);
-      outgoingLight += diffuseColor.rgb * vec3(1.0, 0.55, 0.42) * rim * ${strength.toFixed(2)};
-      #include <opaque_fragment>`,
-    )
+/** Sets (or clears, with null) the shirt colour of a material made by athleteMaterial. */
+export function setShirt(m: THREE.Material, hex: string | null) {
+  const u = m.userData.shirtUniforms as { uShirt: { value: THREE.Vector3 }; uShirtOn: { value: number } }
+  if (!hex) {
+    u.uShirtOn.value = 0
+    return
   }
-  m.customProgramCacheKey = () => `rim-${strength}`
-  return m
+  // Kept in sRGB (0..1), as the test in the shader works on sRGB values.
+  const n = parseInt(hex.slice(1), 16)
+  u.uShirt.value.set(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255)
+  u.uShirtOn.value = 1
 }
 
 const worldPos = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3())
@@ -260,14 +261,14 @@ export function RocketboxBody({
     const scene = cloneSkinned(gltf.scene)
     for (const t of [tex.body, tex.head]) t.colorSpace = THREE.SRGBColorSpace
     for (const t of Object.values(tex)) if (t) t.anisotropy = 8
-    const bodyMap = skin.shirt ? recolourShirt(tex.body, skin.shirt) : tex.body
     // Standard (not physical/sheen) materials: the players fill a lot of pixels near the camera.
     // A cheap warm rim stands in for light scattering through skin and fabric at the edges.
-    const body = withRim(
-      new THREE.MeshStandardMaterial({ map: bodyMap, normalMap: tex.bodyNormal, roughness: 0.72 }),
+    const body = athleteMaterial(
+      new THREE.MeshStandardMaterial({ map: tex.body, normalMap: tex.bodyNormal, roughness: 0.72 }),
       0.22,
+      skin.shirt ?? null,
     )
-    const head = withRim(
+    const head = athleteMaterial(
       new THREE.MeshStandardMaterial({ map: tex.head, normalMap: tex.headNormal, roughness: 0.55 }),
       0.35,
     )
@@ -336,7 +337,6 @@ export function RocketboxBody({
     const dispose = () => {
       for (const g of mergedGeometries) g.dispose()
       for (const m of [body, head, hair]) m.dispose()
-      if (bodyMap !== tex.body) bodyMap.dispose()
     }
     const shoulderBone = scene.getObjectByName('Bip01_R_UpperArm')!
     const leftShoulderBone = scene.getObjectByName('Bip01_L_UpperArm')!

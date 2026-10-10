@@ -1,7 +1,7 @@
 import { useGLTF, useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js'
-import { AVATAR_BASE, mergeByMaterial, recolourShirt } from './Rocketbox'
+import { athleteMaterial, AVATAR_BASE, mergeByMaterial, setShirt } from './Rocketbox'
 import { SKINS, type Skin } from './skins'
 
 // Rocketbox avatars in fixed poses, for people who do not play: the umpire, ball kids and
@@ -118,7 +118,8 @@ export interface PosedAvatar {
   shirt(hex: string | null): void
   /** The three materials, to tell the parts apart. */
   materials: { body: THREE.MeshStandardMaterial; head: THREE.MeshStandardMaterial; hair: THREE.MeshStandardMaterial }
-  dispose(): void
+  /** Frees the avatar; materials in `keep` stay (something else renders with them). */
+  dispose(keep?: Set<THREE.Material>): void
 }
 
 type AvatarTextures = Record<'body' | 'bodyNormal' | 'head' | 'headNormal', THREE.Texture> & { opacity?: THREE.Texture }
@@ -136,18 +137,6 @@ export function useAvatarAssets(skin: Skin) {
   return { gltf, tex }
 }
 
-/**
- * Recoloured shirts, shared by every avatar with the same texture and colour: repainting a
- * 1024 px texture costs tens of milliseconds and megabytes of video memory each time.
- */
-const shirtCache = new Map<string, THREE.Texture>()
-function shirtTexture(src: THREE.Texture, hex: string) {
-  const key = `${src.uuid}|${hex}`
-  let t = shirtCache.get(key)
-  if (!t) shirtCache.set(key, (t = recolourShirt(src, hex)))
-  return t
-}
-
 export function buildPosed(
   assets: ReturnType<typeof useAvatarAssets>,
   opts: { castShadow?: boolean } = {},
@@ -155,7 +144,10 @@ export function buildPosed(
   const { gltf, tex } = assets
   const scene = cloneSkinned(gltf.scene) as THREE.Group
   for (const t of [tex.body, tex.head]) t.colorSpace = THREE.SRGBColorSpace
-  const body = new THREE.MeshStandardMaterial({ map: tex.body, normalMap: tex.bodyNormal, roughness: 0.75 })
+  const body = athleteMaterial(
+    new THREE.MeshStandardMaterial({ map: tex.body, normalMap: tex.bodyNormal, roughness: 0.75 }),
+    0,
+  )
   const head = new THREE.MeshStandardMaterial({ map: tex.head, normalMap: tex.headNormal, roughness: 0.6 })
   const hair = new THREE.MeshStandardMaterial({
     map: tex.head,
@@ -201,16 +193,11 @@ export function buildPosed(
       scene.updateMatrixWorld(true)
     },
     shirt(hex) {
-      if (!hex) {
-        body.map = tex.body
-      } else {
-        body.map = shirtTexture(tex.body, hex)
-      }
-      body.needsUpdate = true
+      setShirt(body, hex)
     },
-    dispose() {
+    dispose(keep) {
       for (const g of geometries) g.dispose()
-      for (const m of [body, head, hair]) m.dispose()
+      for (const m of [body, head, hair]) if (!keep?.has(m)) m.dispose()
     },
   }
 }

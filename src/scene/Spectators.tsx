@@ -109,12 +109,14 @@ export function Spectators({
         const part = mat === a.materials.hair ? 'hair' : mat === a.materials.head ? 'head' : 'body'
         // One material per skin, part and shirt colour (the shirt is the body texture).
         const key = `${p.female ? 'f' : 'm'}|${part}|${part === 'body' ? (p.shirt ?? '-') : ''}`
-        if (!groups.has(key)) groups.set(key, { material: mat.clone(), parts: [] })
+        // The first avatar's material serves the whole group (the shirt colour is a uniform on it).
+        if (!groups.has(key)) groups.set(key, { material: mat, parts: [] })
         groups.get(key)!.parts.push(bake(m))
       })
       return a
     })
-    for (const a of avatars) a.dispose()
+    const used = new Set([...groups.values()].map((g) => g.material))
+    for (const a of avatars) a.dispose(used)
     return [...groups.values()].map(({ material, parts }) => {
       const geometry = mergeGeometries(parts)!
       for (const g of parts) g.dispose()

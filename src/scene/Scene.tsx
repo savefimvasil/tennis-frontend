@@ -154,7 +154,9 @@ export function Scene() {
       shadows="percentage"
       dpr={dpr}
       flat
-      frameloop="demand"
+      // Behind the menus nothing is drawn at all (not even a first frame: compiling every shader
+      // for it is what made the first clicks wait); a picture of the venue stands in.
+      frameloop={screen === 'menu' || screen === 'online' ? 'never' : 'demand'}
       gl={{ antialias: false, powerPreference: 'default', stencil: false }}
       camera={{ fov: 50, near: 0.1, far: 200, position: [0, 6, 16] }}
       onCreated={(state) => {
@@ -193,8 +195,9 @@ export function Scene() {
           <LabScene />
         </Suspense>
       ) : null}
-      {/* Compile every shader up front so nothing compiles mid-rally. */}
-      <Preload all />
+      {/* Compile every shader before play so nothing compiles mid-rally; not behind the menus,
+          where nothing is drawn and the compile would only make the first clicks wait. */}
+      {screen === 'menu' || screen === 'online' ? null : <Preload all />}
     </Canvas>
   )
 }
